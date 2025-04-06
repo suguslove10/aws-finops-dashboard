@@ -32,7 +32,7 @@ It provides an overview of AWS spend by profile, service-level breakdowns, budge
 ### 1. Clone the repo
 
 ```bash
-git clone https://github.com/yourusernameravikiranvm/aws-finops-dashboard.git
+git clone https://github.com/ravikiranvm/aws-finops-dashboard.git
 cd aws-finops-dashboard
 ```
 
