@@ -32,8 +32,8 @@ It provides an overview of AWS spend by profile, service-level breakdowns, budge
 ### 1. Clone the repo
 
 ```bash
-git clone https://github.com/yourusername/aws-cost-dashboard.git
-cd aws-cost-dashboard
+git clone https://github.com/yourusernameravikiranvm/aws-finops-dashboard.git
+cd aws-finops-dashboard
 ```
 
 ### 2. Create a virtual environment (recommended)
