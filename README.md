@@ -98,15 +98,6 @@ You’ll now see a live-updating table of your AWS account cost and usage detail
 
 ---
 
-## Ideas to Improve
-
-- Add total across all profiles  
-- Support JSON or CSV export  
-- Add refund tracking or credits  
-- Monitor over-budget alerts  
-
----
-
 ## Made by Ravi Kiran
 
 Feel free to fork, contribute, or use it as a base for your own FinOps tooling.
