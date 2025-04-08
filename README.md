@@ -72,12 +72,17 @@ Repeat this for all the profiles you want to track in your dashboard.
 
 ---
 
-## Update the script with your profiles
+## Update the script with your profiles & regions
 
 Open the Python script and modify the list of profiles:
 
 ```python
 profiles = ['01', '02', '03']  # Add your AWS named profiles here
+```
+
+You may modify the regions list as per your need:
+```python
+regions = ['us-east-1', 'us-east-2', 'us-west-1', 'us-west-2', 'ap-southeast-1', 'ap-south-1'] # Add your most used regions here
 ```
 
 ---
@@ -95,6 +100,19 @@ You’ll now see a live-updating table of your AWS account cost and usage detail
 ## Example Output
 
 ![alt text](<Screenshot 2025-04-06 at 12.32.09 PM.png>)
+
+---
+
+## Cost For Every Run
+
+AWS charges USD 0.01 for every API call. Currently this script makes 10 API calls per account on every run. 
+
+| API Service | Calls per AWS profile/account |
+| --- | --- |
+| Cost Explorer | 3 get_cost_and_usage calls |
+| Budgets | 1 describe_budgets call |
+| EC2 (describe) | 6 calls (one per region) |
+| Total per profile/account | 10 API calls |
 
 ---
 
