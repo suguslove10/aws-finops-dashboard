@@ -126,7 +126,7 @@ You'll now see a live-updating table of your AWS account cost and usage details,
 
 ## Example Output
 
-![alt text](<Screenshot 2025-04-06 at 12.32.09 PM.png>)
+![alt text](<Screenshot 2025-04-06 at 12.32.09 PM.png>)
 
 ---
 
@@ -176,3 +176,9 @@ AWS charges USD 0.01 for every API call. The number of API calls made by this sc
 ## Made by Ravi Kiran
 
 Feel free to fork, contribute, or use it as a base for your own FinOps tooling.
+
+---
+
+## Acknowledgments
+
+Special thanks to [cschnidr](https://github.com/cschnidr) for their valuable contributions to significantly improve this project!
