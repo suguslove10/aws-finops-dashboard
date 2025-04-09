@@ -245,7 +245,7 @@ def main():
         with Live(table, console=console, refresh_per_second=1):
             for account_id, profiles in account_profiles.items():
                 if len(profiles) > 1:
-                    console.log(f"[cyan]Processing combined profiles for account {account_id}: {', '.join(profiles)}[/]")
+                    console.log(f"[cyan]Processing combined profiles for account {account_id}: {', '.join(profiles)}...[/]")
                     
                     # Use only the first profile for EC2 instance discovery to avoid duplicate API calls
                     primary_profile = profiles[0]
@@ -304,9 +304,12 @@ def main():
                     service_cost_data.sort(key=lambda x: x[1], reverse=True)
                     
                     # Format the sorted data
-                    for service_name, cost_amount in service_cost_data:
-                        service_costs.append(f"{service_name}: ${cost_amount:.2f}")
-                    
+                    if not service_cost_data:
+                        service_costs.append("No costs associated with this account")
+                    else:
+                        for service_name, cost_amount in service_cost_data:
+                            service_costs.append(f"{service_name}: ${cost_amount:.2f}")
+                        
                     # Format budget info
                     budget_info = []
                     for budget in combined_budgets:
@@ -336,7 +339,7 @@ def main():
                 else:
                     # Process single profile normally
                     profile = profiles[0]
-                    console.log(f"[cyan]Processing profile: {profile}[/]")
+                    console.log(f"[cyan]Processing profile: {profile}...[/]")
                     
                     try:
                         session = boto3.Session(profile_name=profile)
@@ -365,9 +368,12 @@ def main():
                         service_cost_data.sort(key=lambda x: x[1], reverse=True)
                         
                         # Format the sorted data
-                        for service_name, cost_amount in service_cost_data:
-                            service_costs.append(f"{service_name}: ${cost_amount:.2f}")
-                        
+                        if not service_cost_data:
+                            service_costs.append("No costs associated with this account")
+                        else:
+                            for service_name, cost_amount in service_cost_data:
+                                service_costs.append(f"{service_name}: ${cost_amount:.2f}")
+                            
                         # Format budget info
                         budget_info = []
                         for budget in cost_data['budgets']:
@@ -397,7 +403,7 @@ def main():
         # Original behavior - process each profile individually
         with Live(table, console=console, refresh_per_second=1):
             for profile in profiles_to_use:
-                console.log(f"[cyan]Processing profile: {profile}[/]")
+                console.log(f"[cyan]Processing profile: {profile}...[/]")
                 
                 try:
                     session = boto3.Session(profile_name=profile)
@@ -426,9 +432,12 @@ def main():
                     service_cost_data.sort(key=lambda x: x[1], reverse=True)
                     
                     # Format the sorted data
-                    for service_name, cost_amount in service_cost_data:
-                        service_costs.append(f"{service_name}: ${cost_amount:.2f}")
-                    
+                    if not service_cost_data:
+                        service_costs.append("No costs associated with this profile")
+                    else:
+                        for service_name, cost_amount in service_cost_data:
+                            service_costs.append(f"{service_name}: ${cost_amount:.2f}")
+                        
                     # Format budget info
                     budget_info = []
                     for budget in cost_data['budgets']:

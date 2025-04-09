@@ -132,14 +132,44 @@ You'll now see a live-updating table of your AWS account cost and usage details,
 
 ## Cost For Every Run
 
-AWS charges USD 0.01 for every API call. Currently this script makes 10 API calls per account on every run. 
+AWS charges USD 0.01 for every API call. The number of API calls made by this script depends on the regions and profiles specified:
 
-| API Service | Calls per AWS profile/account |
-| --- | --- |
-| Cost Explorer | 3 get_cost_and_usage calls |
-| Budgets | 1 describe_budgets call |
-| EC2 (describe) | 6 calls (one per region) |
-| Total per profile/account | 10 API calls |
+| API Service       | Calls per AWS profile/account |
+|--------------------|-------------------------------|
+| Cost Explorer      | 3 `get_cost_and_usage` calls  |
+| Budgets            | 1 `describe_budgets` call    |
+| EC2 (describe)     | 1 call per region queried     |
+| Total per profile  | Varies based on regions      |
+
+### Example Scenarios:
+
+1. **Single Profile, Single Region**:
+   - **API Calls**: 5
+     - 3 Cost Explorer calls
+     - 1 Budgets call
+     - 1 EC2 call for the specified region
+
+2. **Single Profile, All Regions (31 regions)**:
+   - **API Calls**: 38
+     - 3 Cost Explorer calls
+     - 1 Budgets call
+     - 31 EC2 calls (one per region)
+
+3. **Multiple Profiles, Single Region (e.g., 3 profiles)**:
+   - **API Calls**: 15
+     - 3 profiles × (3 Cost Explorer + 1 Budgets + 1 EC2 call)
+
+4. **Combine Profiles for the Same Account, All Regions**:
+   - **API Calls**: 35
+     - 1 EC2 call per region (31 regions, queried once using the primary profile)
+     - 3 Cost Explorer calls per profile
+     - 1 Budgets call per profile
+     - Total depends on the number of profiles.
+
+### Notes:
+- The number of API calls increases with the number of regions queried and profiles processed.
+- To minimize API calls, specify only the regions and profiles you need using the `--regions` and `--profiles` arguments.
+- AWS charges USD 0.01 per API call, so the cost for each run depends on the total number of API calls.
 
 ---
 
