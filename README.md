@@ -8,9 +8,13 @@ It provides an overview of AWS spend by profile, service-level breakdowns, budge
 ## Features
 
 - Current & last month's total spend  
-- Cost by AWS service  
+- Cost by AWS service (sorted by highest cost)  
 - AWS Budgets info (limit, actual)  
-- EC2 instance status (running/stopped) across regions  
+- EC2 instance status across regions with detailed state information
+- Automatic profile detection and selection
+- Combine multiple profiles from the same AWS account
+- Specify custom regions for EC2 instance discovery
+- Improved error handling and resilience
 - Beautifully styled terminal UI
 
 ---
@@ -49,7 +53,7 @@ source venv/bin/activate   # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-> If you don’t have a `requirements.txt`, here’s a quick one:
+> If you don't have a `requirements.txt`, here's a quick one:
 
 ```
 boto3
@@ -60,7 +64,7 @@ rich
 
 ## Set Up AWS CLI Profiles
 
-If you haven’t already, configure your named profiles using the AWS CLI:
+If you haven't already, configure your named profiles using the AWS CLI:
 
 ```bash
 aws configure --profile 01
@@ -72,17 +76,40 @@ Repeat this for all the profiles you want to track in your dashboard.
 
 ---
 
-## Update the script with your profiles & regions
+## Command Line Usage
 
-Open the Python script and modify the list of profiles:
+The dashboard now supports command line arguments, eliminating the need to modify the script directly:
 
-```python
-profiles = ['01', '02', '03']  # Add your AWS named profiles here
+```bash
+python dashboard.py [options]
 ```
 
-You may modify the regions list as per your need:
-```python
-regions = ['us-east-1', 'us-east-2', 'us-west-1', 'us-west-2', 'ap-southeast-1', 'ap-south-1'] # Add your most used regions here
+### Command Line Options
+
+```
+--profiles, -p  Specific AWS profiles to use (space-separated)
+--regions, -r   AWS regions to check for EC2 instances (space-separated)
+--all, -a       Use all available AWS profiles
+--combine, -c   Combine profiles from the same AWS account
+```
+
+### Examples
+
+```bash
+# Use default profile
+python dashboard.py
+
+# Use specific profiles
+python dashboard.py --profiles dev prod
+
+# Use all available profiles
+python dashboard.py --all
+
+# Combine profiles from the same AWS account
+python dashboard.py --all --combine
+
+# Specify custom regions to check
+python dashboard.py --regions us-east-1 eu-west-1 ap-southeast-2
 ```
 
 ---
@@ -90,33 +117,62 @@ regions = ['us-east-1', 'us-east-2', 'us-west-1', 'us-west-2', 'ap-southeast-1',
 ## Run the script
 
 ```bash
-python dashboard.py
+python dashboard.py [options]
 ```
 
-You’ll now see a live-updating table of your AWS account cost and usage details, right in your terminal.
+You'll now see a live-updating table of your AWS account cost and usage details, right in your terminal.
 
 ---
 
 ## Example Output
 
-![alt text](<Screenshot 2025-04-06 at 12.32.09 PM.png>)
+![alt text](<Screenshot 2025-04-06 at 12.32.09 PM.png>)
 
 ---
 
 ## Cost For Every Run
 
-AWS charges USD 0.01 for every API call. Currently this script makes 10 API calls per account on every run. 
+AWS charges USD 0.01 for every API call. The number of API calls made by this script depends on the regions and profiles specified:
 
-| API Service | Calls per AWS profile/account |
-| --- | --- |
-| Cost Explorer | 3 get_cost_and_usage calls |
-| Budgets | 1 describe_budgets call |
-| EC2 (describe) | 6 calls (one per region) |
-| Total per profile/account | 10 API calls |
+| API Service       | Calls per AWS profile/account |
+|--------------------|-------------------------------|
+| Cost Explorer      | 3 `get_cost_and_usage` calls  |
+| Budgets            | 1 `describe_budgets` call    |
+| EC2 (describe)     | 1 call per region queried     |
+| Total per profile  | Varies based on regions      |
+
+### Example Scenarios:
+
+1. **Single Profile, Single Region**:
+   - **API Calls**: 5
+     - 3 Cost Explorer calls
+     - 1 Budgets call
+     - 1 EC2 call for the specified region
+
+2. **Single Profile, All Regions (31 regions)**:
+   - **API Calls**: 38
+     - 3 Cost Explorer calls
+     - 1 Budgets call
+     - 31 EC2 calls (one per region)
+
+3. **Multiple Profiles, Single Region (e.g., 3 profiles)**:
+   - **API Calls**: 15
+     - 3 profiles × (3 Cost Explorer + 1 Budgets + 1 EC2 call)
+
+4. **Combine Profiles for the Same Account, All Regions**:
+   - **API Calls**: 35
+     - 1 EC2 call per region (31 regions, queried once using the primary profile)
+     - 3 Cost Explorer calls per profile
+     - 1 Budgets call per profile
+     - Total depends on the number of profiles.
+
+### Notes:
+- The number of API calls increases with the number of regions queried and profiles processed.
+- To minimize API calls, specify only the regions and profiles you need using the `--regions` and `--profiles` arguments.
+- AWS charges USD 0.01 per API call, so the cost for each run depends on the total number of API calls.
 
 ---
 
 ## Made by Ravi Kiran
 
 Feel free to fork, contribute, or use it as a base for your own FinOps tooling.
-
