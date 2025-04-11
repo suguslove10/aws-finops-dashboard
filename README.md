@@ -1,19 +1,22 @@
-# AWS FinOps Dashboard (CLI)
+# AWS FinOps Dashboard (CLI) v2.1.0
 
-A terminal-based AWS cost and resource dashboard built with Python and the [Rich](https://github.com/Textualize/rich) library.  
-It provides an overview of AWS spend by profile, service-level breakdowns, budget tracking, and EC2 instance summaries.
+A terminal-based AWS cost and resource dashboard built with Python and the [Rich](https://github.com/Textualize/rich) library.
+It provides an overview of AWS spend by profile, service-level breakdowns, budget tracking, EC2 instance summaries, and allows exporting data to CSV.
 
 ---
 
 ## Features
 
-- Current & last month's total spend  
-- Cost by AWS service (sorted by highest cost)  
-- AWS Budgets info (limit, actual)  
-- EC2 instance status across regions with detailed state information
+- Current & last month's total spend
+- Cost by AWS service (sorted by highest cost)
+- AWS Budgets info (limit, actual)
+- EC2 instance status across specified/accessible regions with detailed state information
 - Automatic profile detection and selection
-- Combine multiple profiles from the same AWS account
-- Specify custom regions for EC2 instance discovery
+- Combine multiple profiles from the same AWS account using `--combine`
+- Specify custom regions for EC2 instance discovery using `--regions`
+- **Export dashboard data to a timestamped CSV file using `--export-csv`**
+  - CSV includes multi-line cells for detailed breakdowns (best viewed in spreadsheet software)
+  - Specify output directory using `--dir`
 - Improved error handling and resilience
 - Beautifully styled terminal UI
 
@@ -27,6 +30,7 @@ It provides an overview of AWS spend by profile, service-level breakdowns, budge
   - `ce:GetCostAndUsage`
   - `budgets:DescribeBudgets`
   - `ec2:DescribeInstances`
+  - `ec2:DescribeRegions`
   - `sts:GetCallerIdentity`
 
 ---
@@ -36,7 +40,8 @@ It provides an overview of AWS spend by profile, service-level breakdowns, budge
 ### 1. Clone the repo
 
 ```bash
-git clone https://github.com/ravikiranvm/aws-finops-dashboard.git
+# If you haven't already cloned it
+git clone https://github.com/ravikiranvm/aws-finops-dashboard
 cd aws-finops-dashboard
 ```
 
@@ -53,13 +58,12 @@ source venv/bin/activate   # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-> If you don't have a `requirements.txt`, here's a quick one:
+> If you don't have a `requirements.txt`, create one with:
 
 ```
-boto3
-rich
+boto3>=1.20.0
+rich>=10.0.0
 ```
-
 ---
 
 ## Set Up AWS CLI Profiles
@@ -67,18 +71,18 @@ rich
 If you haven't already, configure your named profiles using the AWS CLI:
 
 ```bash
-aws configure --profile 01
-aws configure --profile 02
-aws configure --profile 03
+aws configure --profile profile1-name
+aws configure --profile profile2-name
+# ... etc ...
 ```
 
-Repeat this for all the profiles you want to track in your dashboard.
+Repeat this for all the profiles you want the dashboard to potentially access.
 
 ---
 
 ## Command Line Usage
 
-The dashboard now supports command line arguments, eliminating the need to modify the script directly:
+Run the script using `python dashboard.py` followed by options:
 
 ```bash
 python dashboard.py [options]
@@ -86,20 +90,23 @@ python dashboard.py [options]
 
 ### Command Line Options
 
-```
---profiles, -p  Specific AWS profiles to use (space-separated)
---regions, -r   AWS regions to check for EC2 instances (space-separated)
---all, -a       Use all available AWS profiles
---combine, -c   Combine profiles from the same AWS account
-```
+| Flag | Description |
+|---|---|
+| --profiles, -p | Specific AWS profiles to use (space-separated). If omitted, uses 'default' profile if available, otherwise all profiles. |
+| --regions, -r | Specific AWS regions to check for EC2 instances (space-separated). If omitted, attempts to check all accessible regions. |
+| --all, -a | Use all available AWS profiles found in your config. |
+| --combine, -c | Combine profiles from the same AWS account into single rows. |
+| --export-csv, -e | Export the dashboard data to a CSV file. Provide a base filename (timestamp will be added automatically). |
+| --dir, -d | Directory to save the CSV file (default: current directory). Requires --export-csv to be set. |
+
 
 ### Examples
 
 ```bash
-# Use default profile
+# Use default profile, show output in terminal only
 python dashboard.py
 
-# Use specific profiles
+# Use specific profiles 'dev' and 'prod'
 python dashboard.py --profiles dev prod
 
 # Use all available profiles
@@ -108,74 +115,77 @@ python dashboard.py --all
 # Combine profiles from the same AWS account
 python dashboard.py --all --combine
 
-# Specify custom regions to check
+# Specify custom regions to check for EC2 instances
 python dashboard.py --regions us-east-1 eu-west-1 ap-southeast-2
+
+# Export data for all profiles to 'aws_dashboard_data_YYYYMMDD_HHMM.csv' in the current directory
+python dashboard.py --all --export-csv aws_dashboard_data
+
+# Export combined data for 'dev' and 'prod' profiles to 'report_YYYYMMDD_HHMM.csv' in 'output_reports' directory
+python dashboard.py --profiles dev prod --combine --export-csv report --dir output_reports
 ```
 
 ---
 
 ## Run the script
 
+Execute the script from your terminal within the project directory (and activated virtual environment):
+
 ```bash
 python dashboard.py [options]
 ```
 
-You'll now see a live-updating table of your AWS account cost and usage details, right in your terminal.
+You'll see a live-updating table of your AWS account cost and usage details in the terminal. If `--export-csv` is used, a CSV file will also be generated upon completion.
 
 ---
 
-## Example Output
+## Example Terminal Output
 
 ![alt text](<Screenshot 2025-04-06 at 12.32.09 PM.png>)
 
 ---
 
+## CSV Output Format
+
+When using `--export-csv`, a CSV file is generated with the following columns:
+
+- `CLI Profile`
+- `AWS Account ID`
+- `Last Month Cost`
+- `Current Month Cost`
+- `Cost By Service` (Each service and its cost appears on a new line within the cell)
+- `Budget Status` (Each budget's limit and actual spend appears on a new line within the cell)
+- `EC2 Instances` (Each instance state and its count appears on a new line within the cell)
+
+**Note:** Due to the multi-line formatting in some cells, it's best viewed in spreadsheet software (like Excel, Google Sheets, LibreOffice Calc) rather than plain text editors.
+
+---
+
 ## Cost For Every Run
 
-AWS charges USD 0.01 for every API call. The number of API calls made by this script depends on the regions and profiles specified:
+This script makes API calls to AWS, primarily to Cost Explorer, Budgets, EC2, and STS. AWS may charge for some API calls (e.g., `$0.01` per 1,000 `GetCostAndUsage` requests beyond the free tier, check current pricing).
 
-| API Service       | Calls per AWS profile/account |
-|--------------------|-------------------------------|
-| Cost Explorer      | 3 `get_cost_and_usage` calls  |
-| Budgets            | 1 `describe_budgets` call    |
-| EC2 (describe)     | 1 call per region queried     |
-| Total per profile  | Varies based on regions      |
+The number of API calls depends heavily on the options used:
 
-### Example Scenarios:
+-   **Cost Explorer & Budgets:** Typically 3 `ce:GetCostAndUsage` and 1 `budgets:DescribeBudgets` call per profile processed.
+-   **STS:** 1 `sts:GetCallerIdentity` call per profile processed (used for account ID).
+-   **EC2:**
+    -   1 `ec2:DescribeRegions` call initially (per session).
+    -   If `--regions` is **not** specified, the script attempts to check accessibility by calling `ec2:DescribeInstances` in *multiple regions*, potentially increasing API calls significantly.
+    -   If `--regions` **is** specified, 1 `ec2:DescribeInstances` call is made *per specified region* (per profile, unless `--combine` is used, where it's called once per region for the primary profile).
 
-1. **Single Profile, Single Region**:
-   - **API Calls**: 5
-     - 3 Cost Explorer calls
-     - 1 Budgets call
-     - 1 EC2 call for the specified region
+**To minimize API calls and potential costs:**
 
-2. **Single Profile, All Regions (31 regions)**:
-   - **API Calls**: 38
-     - 3 Cost Explorer calls
-     - 1 Budgets call
-     - 31 EC2 calls (one per region)
+-   Use the `--profiles` argument to specify only the profiles you need.
+-   Use the `--regions` argument to limit EC2 checks to only relevant regions. This significantly reduces `ec2:DescribeInstances` calls compared to automatic region discovery.
 
-3. **Multiple Profiles, Single Region (e.g., 3 profiles)**:
-   - **API Calls**: 15
-     - 3 profiles × (3 Cost Explorer + 1 Budgets + 1 EC2 call)
-
-4. **Combine Profiles for the Same Account, All Regions**:
-   - **API Calls**: 35
-     - 1 EC2 call per region (31 regions, queried once using the primary profile)
-     - 3 Cost Explorer calls per profile
-     - 1 Budgets call per profile
-     - Total depends on the number of profiles.
-
-### Notes:
-- The number of API calls increases with the number of regions queried and profiles processed.
-- To minimize API calls, specify only the regions and profiles you need using the `--regions` and `--profiles` arguments.
-- AWS charges USD 0.01 per API call, so the cost for each run depends on the total number of API calls.
+The exact cost per run is usually negligible but depends on the scale of your usage and AWS pricing.
 
 ---
 
 ## Made by Ravi Kiran
 
-Feel free to fork, contribute, or use it as a base for your own FinOps tooling.
+Feel free to fork and contribute.
 
 ---
 
