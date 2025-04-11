@@ -1,13 +1,13 @@
 import boto3
 import argparse
 import sys
-from datetime import date, timedelta
+import os, csv
+from datetime import date, timedelta, datetime
 from rich.console import Console
 from rich.table import Table, Column
 from rich.panel import Panel
 from rich import box
 from rich.live import Live
-from time import sleep
 from collections import defaultdict
 
 console = Console()
@@ -168,13 +168,62 @@ def ec2_summary(session, regions=None):
     
     return instance_summary
 
+def export_to_csv(data, filename, output_dir=None):
+    try:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+        base_filename = f"{filename}_{timestamp}.csv"
+
+        if output_dir:
+            os.makedirs(output_dir, exist_ok=True)
+            output_filename = os.path.join(output_dir, base_filename)
+        else:
+            output_filename = base_filename 
+        
+        with open(output_filename, 'w', newline='') as csvfile:
+            fieldnames = ['CLI Profile', 'AWS Account ID', 'Last Month Cost', 'Current Month Cost', 'Cost By Service', 'Budget Status', 'EC2 Instances']
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
+            for row in data:
+
+                services_data = "\n".join([f"{service}: ${cost:.2f}" 
+                                        for service, cost in row['service_costs']])
+                
+                # Format budget info from raw data
+                budgets_data = "\n".join(row['budget_info']) if row['budget_info'] else "No budgets"
+                
+                # Format EC2 info from raw data
+                ec2_data_summary = "\n".join([f"{state}: {count}" 
+                                    for state, count in row['ec2_summary'].items() 
+                                    if count > 0])
+
+                writer.writerow({
+                    'CLI Profile': row['profile'],
+                    'AWS Account ID': row['account_id'],
+                    'Last Month Cost': f"${row['last_month']:.2f}",
+                    'Current Month Cost': f"${row['current_month']:.2f}",
+                    'Cost By Service': services_data or "No costs",
+                    'Budget Status': budgets_data or "No budgets",
+                    'EC2 Instances': ec2_data_summary or "No instances"
+                })
+        console.print(f"[bright_green]Exported dashboard data to {os.path.abspath(output_filename)}[/]")
+        return os.path.abspath(output_filename)
+    except Exception as e:
+        console.print(f"[bold red]Error exporting to CSV: {str(e)}[/]")
+        return None
+
+
 def main():
     parser = argparse.ArgumentParser(description='AWS FinOps Dashboard CLI')
     parser.add_argument('--profiles', '-p', nargs='+', help='Specific AWS profiles to use (space-separated)')
     parser.add_argument('--regions', '-r', nargs='+', help='AWS regions to check for EC2 instances (space-separated)')
     parser.add_argument('--all', '-a', action='store_true', help='Use all available AWS profiles')
     parser.add_argument('--combine', '-c', action='store_true', help='Combine profiles from the same AWS account')
+
+    parser.add_argument('--export-csv', '-e', help='Export the dashboard data to a CSV file(provide a filename without extension)')
+    parser.add_argument('--dir', '-d', help='Directory to save the CSV file (default: current directory)')
     args = parser.parse_args()
+
+    export_data = []
 
     # Get all available profiles
     available_profiles = get_aws_profiles()
@@ -249,17 +298,35 @@ def main():
                     
                     # Use only the first profile for EC2 instance discovery to avoid duplicate API calls
                     primary_profile = profiles[0]
-                    console.log(f"[cyan]Using {primary_profile} as primary profile for EC2 discovery[/]")
+                    console.log(f"[cyan]Using {primary_profile} as primary profile for EC2 discovery & cost data[/]")
+
+                    # Get EC2 data and cost data from the primary profile
+                    primary_session = boto3.Session(profile_name=primary_profile)
                     
-                    # Combine data from all profiles for this account
+                    # cost data for this account
+                    # since all profiles belong to the same account, we can use the first profile to get cost data
                     combined_current_month = 0
                     combined_last_month = 0
                     combined_service_costs = defaultdict(float)
                     combined_budgets = []
                     
-                    # Get EC2 data only from the primary profile
-                    primary_session = boto3.Session(profile_name=primary_profile)
-                    
+                    try:
+                        account_cost_data = get_cost_data(primary_session)
+                        combined_current_month = account_cost_data['current_month']
+                        combined_last_month = account_cost_data['last_month']
+                        combined_service_costs = defaultdict(float)
+                        for group in account_cost_data['current_month_cost_by_service']:
+                            if 'Keys' in group and 'Metrics' in group:
+                                service_name = group['Keys'][0]
+                                cost_amount = float(group['Metrics']['UnblendedCost']['Amount'])
+                                if cost_amount > 0.001:  # Only add services with non-zero costs
+                                    combined_service_costs[service_name] += cost_amount
+                    except Exception as e:
+                        console.log(f"[bold red]Error getting cost data for account {account_id}: {str(e)}[/]")
+
+                    # Add budgets
+                    combined_budgets = account_cost_data.get('budgets', [])
+
                     # Determine accessible regions for the primary profile
                     if user_regions:
                         primary_regions = user_regions
@@ -268,36 +335,7 @@ def main():
                         console.log(f"[cyan]Primary profile {primary_profile} - Using regions: {', '.join(primary_regions)}[/]")
                     
                     combined_ec2 = ec2_summary(primary_session, primary_regions)
-                    
-                    for profile in profiles:
-                        try:
-                            session = boto3.Session(profile_name=profile)
-                            cost_data = get_cost_data(session)
-                            
-                            # We already got EC2 data from the primary profile, so we don't need to get it again
-                            # ec2_data = ec2_summary(session, regions)
-                            
-                            combined_current_month += cost_data['current_month']
-                            combined_last_month += cost_data['last_month']
-                            
-                            # Combine service costs
-                            for group in cost_data['current_month_cost_by_service']:
-                                if 'Keys' in group and 'Metrics' in group:
-                                    service_name = group['Keys'][0]
-                                    cost_amount = float(group['Metrics']['UnblendedCost']['Amount'])
-                                    if cost_amount > 0.001:  # Only add services with non-zero costs
-                                        combined_service_costs[service_name] += cost_amount
-                            
-                            # Add budgets (without duplicates)
-                            for budget in cost_data['budgets']:
-                                if not any(b['name'] == budget['name'] for b in combined_budgets):
-                                    combined_budgets.append(budget)
-                            
-                            # We already got EC2 data from the primary profile, so skip it here
-                            
-                        except Exception as e:
-                            console.log(f"[bold red]Error processing profile {profile}: {str(e)}[/]")
-                    
+                                        
                     # Format service costs and sort by cost (highest to lowest)
                     service_costs = []
                     service_cost_data = [(service, cost) for service, cost in combined_service_costs.items() if cost > 0.001]
@@ -336,6 +374,18 @@ def main():
                         f"[bright_yellow]{'\n'.join(budget_info)}[/]",
                         "\n".join(ec2_summary_text)
                     )
+
+                    # Export the data to CSV
+                    export_data.append({
+                        'profile': profile_list,
+                        'account_id': account_id,
+                        'last_month': combined_last_month,
+                        'current_month': combined_current_month,
+                        'service_costs': service_cost_data,
+                        'budget_info': budget_info,
+                        'ec2_summary': combined_ec2
+                    })
+
                 else:
                     # Process single profile normally
                     profile = profiles[0]
@@ -353,6 +403,15 @@ def main():
                             console.log(f"[cyan]Profile {profile} - Using regions: {', '.join(profile_regions)}[/]")
                         
                         ec2_data = ec2_summary(session, profile_regions)
+
+                        ec2_summary_text = []
+                        for state, count in sorted(ec2_data.items()):
+                            if count > 0:  # Only show states with instances
+                                state_color = "bright_green" if state == "running" else "bright_yellow" if state == "stopped" else "bright_cyan"
+                                ec2_summary_text.append(f"[{state_color}]{state}: {count}[/]")
+
+                        if not ec2_summary_text:
+                            ec2_summary_text = ["No instances found"]
                         
                         # Format service costs and sort by cost (highest to lowest)
                         service_costs = []
@@ -386,9 +445,21 @@ def main():
                             f"[bright_green]${cost_data['current_month']:.2f}[/]",
                             f"[bright_green]{'\n'.join(service_costs)}[/]",
                             f"[bright_yellow]{'\n'.join(budget_info)}[/]",
-                            f"[bright_red]Running: {ec2_data['running']}\nStopped: {ec2_data['stopped']}[/]"
+                            "\n".join(ec2_summary_text)
                         )
                         console.log(f"[bright_cyan]Processing profile: {profile} completed[/]")
+
+                        # Export the data to CSV
+                        export_data.append({
+                            'profile': profile,
+                            'account_id': account_id,
+                            'last_month': cost_data['last_month'],
+                            'current_month': cost_data['current_month'],
+                            'service_costs': service_cost_data,
+                            'budget_info': budget_info,
+                            'ec2_summary': ec2_data
+                        })
+
                     except Exception as e:
                         console.log(f"[bold red]Error processing profile {profile}: {str(e)}[/]")
                         table.add_row(
@@ -399,6 +470,17 @@ def main():
                             "[red]N/A[/]",
                             "[red]N/A[/]"
                         )
+                        export_data.append({
+                            'profile': profile,
+                            'account_id': 'Error',
+                            'last_month': 0,
+                            'current_month': 0,
+                            'service_costs': [],
+                            'budget_info': ['N/A'],
+                            'ec2_summary': {'N/A' : 'N/A'}
+                        })
+
+
     else:
         # Original behavior - process each profile individually
         with Live(table, console=console, refresh_per_second=1):
@@ -464,6 +546,18 @@ def main():
                         "\n".join(ec2_summary_text)
                     )
                     console.log(f"[bright_cyan]Processing profile: {profile} completed[/]")
+
+                    # Export the data to CSV
+                    export_data.append({
+                        'profile': profile,
+                        'account_id': account_id,
+                        'last_month': cost_data['last_month'],
+                        'current_month': cost_data['current_month'],
+                        'service_costs': service_cost_data,
+                        'budget_info': budget_info,
+                        'ec2_summary': ec2_data
+                    })
+
                 except Exception as e:
                     console.log(f"[bold red]Error processing profile {profile}: {str(e)}[/]")
                     table.add_row(
@@ -474,6 +568,19 @@ def main():
                         "[red]N/A[/]",
                         "[red]N/A[/]"
                     )
+                    export_data.append({
+                        'profile': profile,
+                        'account_id': 'Error',
+                        'last_month': 0,
+                        'current_month': 0,
+                        'service_costs': [],
+                        'budget_info': ['N/A'],
+                        'ec2_summary': {'N/A' : 'N/A'}
+                    })
+                
+    # Export to CSV if requested
+    if args.export_csv:
+        export_to_csv(export_data, args.export_csv, args.dir)
 
 if __name__ == "__main__":
     main()
