@@ -1,0 +1,11 @@
+# Include the README and LICENSE file
+include README.md
+include LICENSE
+
+# Include your screenshot image
+include dashboard_image.png
+
+# Exclude the virtual environment
+exclude venv/*
+
+exclude requirements.txt 
