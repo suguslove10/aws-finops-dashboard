@@ -1,4 +1,8 @@
-# AWS FinOps Dashboard (CLI) v2.1.0
+# AWS FinOps Dashboard (CLI) v2.1.1
+
+[![PyPI version](https://img.shields.io/pypi/v/aws-finops-dashboard.svg)](https://pypi.org/project/aws-finops-dashboard/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![GitHub stars](https://img.shields.io/github/stars/ravikiranvm/aws-finops-dashboard.svg)](https://github.com/ravikiranvm/aws-finops-dashboard/stargazers)
 
 A terminal-based AWS cost and resource dashboard built with Python and the [Rich](https://github.com/Textualize/rich) library.
 It provides an overview of AWS spend by profile, service-level breakdowns, budget tracking, EC2 instance summaries, and allows exporting data to CSV.
@@ -37,33 +41,18 @@ It provides an overview of AWS spend by profile, service-level breakdowns, budge
 
 ## Installation
 
-### 1. Clone the repo
+### Install using pipx (Recommended)
+```bash
+pipx install aws-finops-dashboard
+```
+
+If you don’t have `pipx`, install it with:
 
 ```bash
-# If you haven't already cloned it
-git clone https://github.com/ravikiranvm/aws-finops-dashboard
-cd aws-finops-dashboard
+python -m pip install --user pipx
+python -m pipx ensurepath
 ```
 
-### 2. Create a virtual environment (recommended)
-
-```bash
-python3 -m venv venv
-source venv/bin/activate   # On Windows: venv\Scripts\activate
-```
-
-### 3. Install dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-> If you don't have a `requirements.txt`, create one with:
-
-```
-boto3>=1.20.0
-rich>=10.0.0
-```
 ---
 
 ## Set Up AWS CLI Profiles
@@ -82,10 +71,10 @@ Repeat this for all the profiles you want the dashboard to potentially access.
 
 ## Command Line Usage
 
-Run the script using `python dashboard.py` followed by options:
+Run the script using `aws-finops` followed by options:
 
 ```bash
-python dashboard.py [options]
+aws-finops [options]
 ```
 
 ### Command Line Options
@@ -104,35 +93,25 @@ python dashboard.py [options]
 
 ```bash
 # Use default profile, show output in terminal only
-python dashboard.py
+aws-finops
 
 # Use specific profiles 'dev' and 'prod'
-python dashboard.py --profiles dev prod
+aws-finops --profiles dev prod
 
 # Use all available profiles
-python dashboard.py --all
+aws-finops --all
 
 # Combine profiles from the same AWS account
-python dashboard.py --all --combine
+aws-finops --all --combine
 
 # Specify custom regions to check for EC2 instances
-python dashboard.py --regions us-east-1 eu-west-1 ap-southeast-2
+aws-finops --regions us-east-1 eu-west-1 ap-southeast-2
 
 # Export data for all profiles to 'aws_dashboard_data_YYYYMMDD_HHMM.csv' in the current directory
-python dashboard.py --all --export-csv aws_dashboard_data
+aws-finops --all --export-csv aws_dashboard_data
 
 # Export combined data for 'dev' and 'prod' profiles to 'report_YYYYMMDD_HHMM.csv' in 'output_reports' directory
-python dashboard.py --profiles dev prod --combine --export-csv report --dir output_reports
-```
-
----
-
-## Run the script
-
-Execute the script from your terminal within the project directory (and activated virtual environment):
-
-```bash
-python dashboard.py [options]
+aws-finops --profiles dev prod --combine --export-csv report --dir output_reports
 ```
 
 You'll see a live-updating table of your AWS account cost and usage details in the terminal. If `--export-csv` is used, a CSV file will also be generated upon completion.
@@ -141,7 +120,7 @@ You'll see a live-updating table of your AWS account cost and usage details in t
 
 ## Example Terminal Output
 
-![alt text](<Screenshot 2025-04-06 at 12.32.09 PM.png>)
+![Dashboard Screenshot](dashboard_image.png)
 
 ---
 
@@ -185,10 +164,22 @@ The exact cost per run is usually negligible but depends on the scale of your us
 
 ## Made by Ravi Kiran
 
-Feel free to fork and contribute.
+Open to contributions! Feel free to fork and contribute.
+
+```bash
+# If you haven't already cloned it
+git clone https://github.com/ravikiranvm/aws-finops-dashboard
+cd aws-finops-dashboard
+pip install -r requirements.txt
+python dashboard.py --help
+```
 
 ---
 
 ## Acknowledgments
 
 Special thanks to [cschnidr](https://github.com/cschnidr) for their valuable contributions to significantly improve this project!
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
