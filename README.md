@@ -48,7 +48,9 @@ It provides an overview of AWS spend by profile, service-level breakdowns, budge
 
 ## Installation
 
-### Install using pipx (Recommended)
+There are several ways to install the AWS FinOps Dashboard:
+
+### Option 1: Using pipx (Recommended)
 ```bash
 pipx install aws-finops-dashboard
 ```
@@ -58,6 +60,32 @@ If you don't have `pipx`, install it with:
 ```bash
 python -m pip install --user pipx
 python -m pipx ensurepath
+```
+
+### Option 2: Using pip
+```bash
+pip install aws-finops-dashboard
+```
+
+### Option 3: Using uv (Fast Python Package Installer)
+[uv](https://github.com/astral-sh/uv) is a modern Python package installer and resolver that's extremely fast.
+
+```bash
+# Install uv if you don't have it yet
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Install aws-finops-dashboard
+uv pip install aws-finops-dashboard
+```
+
+### Option 4: From Source
+```bash
+# Clone the repository
+git clone https://github.com/ravikiranvm/aws-finops-dashboard.git
+cd aws-finops-dashboard
+
+# Install using pip
+pip install -e .
 ```
 
 ---
@@ -190,6 +218,8 @@ The exact cost per run is usually negligible but depends on the scale of your us
 
 Contributions are welcome! Feel free to fork and improve the project.
 
+### Development Setup with pip
+
 ```bash
 # Fork this repository on GitHub first:
 # https://github.com/ravikiranvm/aws-finops-dashboard
@@ -198,15 +228,57 @@ Contributions are welcome! Feel free to fork and improve the project.
 git clone https://github.com/your-username/aws-finops-dashboard.git
 cd aws-finops-dashboard
 
-# (Optional) Create and activate a virtual environment
+# Create and activate a virtual environment
 python -m venv venv
 source venv/bin/activate  # On Windows use `venv\Scripts\activate`
 
 # Install dependencies
 pip install -r requirements.txt
+pip install -e ".[dev]"
+
+# Run the formatter
+hatch run fmt
+
+# Run linters
+hatch run lint
 
 # Run the tool
 python -m aws_finops_dashboard.cli --help
+```
+
+### Development Setup with uv
+
+`uv` provides a much faster development environment setup:
+
+```bash
+# Fork this repository on GitHub first:
+# https://github.com/ravikiranvm/aws-finops-dashboard
+
+# Then clone your fork locally
+git clone https://github.com/your-username/aws-finops-dashboard.git
+cd aws-finops-dashboard
+
+# Install uv if you don't have it yet
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Create and sync the virtual environment (.venv)
+uv venv
+uv pip install -e ".[dev]"
+
+# Activate the virtual environment
+source .venv/bin/activate  # On Windows use `.venv\Scripts\activate`
+
+# Run the formatter
+uv run hatch run fmt
+
+# Run linters
+uv run hatch run lint
+
+# Run tests 
+uv run hatch run test
+
+# Run the tool
+aws-finops
 ```
 
 ---

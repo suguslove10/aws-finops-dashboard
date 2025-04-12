@@ -2,15 +2,18 @@ import csv
 import json
 import os
 from datetime import date, datetime, timedelta
+from typing import List, Optional, Tuple
 
+from boto3.session import Session
 from rich.console import Console
 
 from aws_finops_dashboard.aws_client import get_account_id
+from aws_finops_dashboard.types import BudgetInfo, CostData, EC2Summary, ProfileData
 
 console = Console()
 
 
-def get_cost_data(session, time_range=None):
+def get_cost_data(session: Session, time_range: Optional[int] = None) -> CostData:
     """
     Get cost data for an AWS account.
 
@@ -76,7 +79,7 @@ def get_cost_data(session, time_range=None):
         console.log(f"[yellow]Error getting current period cost by service: {e}[/]")
         current_period_cost_by_service = {"ResultsByTime": [{"Groups": []}]}
 
-    budgets_data = []
+    budgets_data: List[BudgetInfo] = []
     try:
         response = budgets.describe_budgets(AccountId=account_id)
         for budget in response["Budgets"]:
@@ -97,12 +100,12 @@ def get_cost_data(session, time_range=None):
         console.log(f"[yellow]Error getting budget data: {e}[/]")
         pass
 
-    current_period_cost = 0
+    current_period_cost = 0.0
     for period in this_period.get("ResultsByTime", []):
         if "Total" in period and "UnblendedCost" in period["Total"]:
             current_period_cost += float(period["Total"]["UnblendedCost"]["Amount"])
 
-    previous_period_cost = 0
+    previous_period_cost = 0.0
     for period in previous_period.get("ResultsByTime", []):
         if "Total" in period and "UnblendedCost" in period["Total"]:
             previous_period_cost += float(period["Total"]["UnblendedCost"]["Amount"])
@@ -126,10 +129,12 @@ def get_cost_data(session, time_range=None):
     }
 
 
-def process_service_costs(cost_data):
+def process_service_costs(
+    cost_data: CostData,
+) -> Tuple[List[str], List[Tuple[str, float]]]:
     """Process and format service costs from cost data."""
-    service_costs = []
-    service_cost_data = []
+    service_costs: List[str] = []
+    service_cost_data: List[Tuple[str, float]] = []
 
     for group in cost_data["current_month_cost_by_service"]:
         if "Keys" in group and "Metrics" in group:
@@ -140,7 +145,6 @@ def process_service_costs(cost_data):
 
     service_cost_data.sort(key=lambda x: x[1], reverse=True)
 
-    # Format the sorted data
     if not service_cost_data:
         service_costs.append("No costs associated with this account")
     else:
@@ -150,18 +154,18 @@ def process_service_costs(cost_data):
     return service_costs, service_cost_data
 
 
-def format_budget_info(budgets):
+def format_budget_info(budgets: List[BudgetInfo]) -> List[str]:
     """Format budget information for display."""
-    budget_info = []
+    budget_info: List[str] = []
     for budget in budgets:
         budget_info.append(f"{budget['name']} limit: ${budget['limit']}")
         budget_info.append(f"{budget['name']} actual: ${budget['actual']:.2f}")
     return budget_info
 
 
-def format_ec2_summary(ec2_data):
+def format_ec2_summary(ec2_data: EC2Summary) -> List[str]:
     """Format EC2 instance summary for display."""
-    ec2_summary_text = []
+    ec2_summary_text: List[str] = []
     for state, count in sorted(ec2_data.items()):
         if count > 0:
             state_color = (
@@ -177,7 +181,9 @@ def format_ec2_summary(ec2_data):
     return ec2_summary_text
 
 
-def export_to_csv(data, filename, output_dir=None):
+def export_to_csv(
+    data: List[ProfileData], filename: str, output_dir: Optional[str] = None
+) -> Optional[str]:
     """Export dashboard data to a CSV file."""
     try:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M")
@@ -244,7 +250,9 @@ def export_to_csv(data, filename, output_dir=None):
         return None
 
 
-def export_to_json(data, filename, output_dir=None):
+def export_to_json(
+    data: List[ProfileData], filename: str, output_dir: Optional[str] = None
+) -> Optional[str]:
     """Export dashboard data to a JSON file."""
     try:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M")

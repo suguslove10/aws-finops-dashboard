@@ -1,12 +1,16 @@
 from collections import defaultdict
+from typing import List, Optional
 
 import boto3
+from boto3.session import Session
 from rich.console import Console
+
+from aws_finops_dashboard.types import EC2Summary, RegionName
 
 console = Console()
 
 
-def get_aws_profiles():
+def get_aws_profiles() -> List[str]:
     """Get all configured AWS profiles from the AWS CLI configuration."""
     try:
         session = boto3.Session()
@@ -16,16 +20,17 @@ def get_aws_profiles():
         return []
 
 
-def get_account_id(session):
+def get_account_id(session: Session) -> Optional[str]:
     """Get the AWS account ID for a session."""
     try:
-        return session.client("sts").get_caller_identity().get("Account")
+        account_id = session.client("sts").get_caller_identity().get("Account")
+        return str(account_id) if account_id is not None else None
     except Exception as e:
         console.log(f"[yellow]Warning: Could not get account ID: {str(e)}[/]")
         return None
 
 
-def get_all_regions(session):
+def get_all_regions(session: Session) -> List[RegionName]:
     """Get all available AWS regions."""
     try:
         ec2_client = session.client("ec2", region_name="us-east-1")
@@ -48,7 +53,7 @@ def get_all_regions(session):
         ]
 
 
-def get_accessible_regions(session):
+def get_accessible_regions(session: Session) -> List[RegionName]:
     """Get regions that are accessible with the current credentials."""
     all_regions = get_all_regions(session)
     accessible_regions = []
@@ -70,7 +75,9 @@ def get_accessible_regions(session):
     return accessible_regions
 
 
-def ec2_summary(session, regions=None):
+def ec2_summary(
+    session: Session, regions: Optional[List[RegionName]] = None
+) -> EC2Summary:
     """Get EC2 instance summary across specified regions or all regions."""
     if regions is None:
         regions = [
@@ -85,7 +92,7 @@ def ec2_summary(session, regions=None):
             "eu-west-2",
         ]
 
-    instance_summary = defaultdict(int)
+    instance_summary: EC2Summary = defaultdict(int)
 
     for region in regions:
         try:

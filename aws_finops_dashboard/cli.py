@@ -2,20 +2,23 @@ import argparse
 import sys
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     """Parse command line arguments for the AWS FinOps Dashboard."""
     parser = argparse.ArgumentParser(description="AWS FinOps Dashboard CLI")
+
     parser.add_argument(
         "--profiles",
         "-p",
         nargs="+",
         help="Specific AWS profiles to use (space-separated)",
+        type=str,
     )
     parser.add_argument(
         "--regions",
         "-r",
         nargs="+",
         help="AWS regions to check for EC2 instances (space-separated)",
+        type=str,
     )
     parser.add_argument(
         "--all", "-a", action="store_true", help="Use all available AWS profiles"
@@ -31,6 +34,7 @@ def parse_args():
         "-n",
         help="Specify the base name for the report file (without extension)",
         default=None,
+        type=str,
     )
     parser.add_argument(
         "--report-type",
@@ -38,12 +42,14 @@ def parse_args():
         nargs="+",
         choices=["csv", "json"],
         help="Specify one or more report types: csv and/or json (space-separated)",
+        type=str,
         default=["csv"],
     )
     parser.add_argument(
         "--dir",
         "-d",
         help="Directory to save the report files (default: current directory)",
+        type=str,
     )
     parser.add_argument(
         "--time-range",
@@ -55,12 +61,13 @@ def parse_args():
     return parser.parse_args()
 
 
-def main():
+def main() -> int:
     """Command-line interface entry point."""
     from aws_finops_dashboard.main import run_dashboard
 
     args = parse_args()
-    return run_dashboard(args)
+    result = run_dashboard(args)
+    return 0 if result == 0 else 1
 
 
 if __name__ == "__main__":

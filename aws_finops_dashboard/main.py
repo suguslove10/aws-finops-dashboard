@@ -1,5 +1,7 @@
+import argparse
 import sys
 from collections import defaultdict
+from typing import Dict, List, Optional
 
 import boto3
 from rich import box
@@ -21,11 +23,16 @@ from aws_finops_dashboard.cost_processor import (
     get_cost_data,
     process_service_costs,
 )
+from aws_finops_dashboard.types import BudgetInfo, ProfileData
 
 console = Console()
 
 
-def process_single_profile(profile, user_regions=None, time_range=None):
+def process_single_profile(
+    profile: str,
+    user_regions: Optional[List[str]] = None,
+    time_range: Optional[int] = None,
+) -> ProfileData:
     """Process a single AWS profile and return its data."""
     console.log(f"[cyan]Processing profile: {profile}...[/]")
 
@@ -42,12 +49,9 @@ def process_single_profile(profile, user_regions=None, time_range=None):
             )
 
         ec2_data = ec2_summary(session, profile_regions)
-
         service_costs, service_cost_data = process_service_costs(cost_data)
-
         budget_info = format_budget_info(cost_data["budgets"])
-
-        account_id = cost_data.get("account_id", "Unknown")
+        account_id = cost_data.get("account_id", "Unknown") or "Unknown"
         ec2_summary_text = format_ec2_summary(ec2_data)
 
         console.log(f"[bright_cyan]Processing profile: {profile} completed[/]")
@@ -80,14 +84,21 @@ def process_single_profile(profile, user_regions=None, time_range=None):
             "service_costs": [],
             "service_costs_formatted": [f"Failed to process profile: {str(e)}"],
             "budget_info": ["N/A"],
-            "ec2_summary": {"N/A": "N/A"},
+            "ec2_summary": {"N/A": 0},
             "ec2_summary_formatted": ["Error"],
             "success": False,
             "error": str(e),
+            "current_period_name": "Current month",
+            "previous_period_name": "Last month",
         }
 
 
-def process_combined_profiles(account_id, profiles, user_regions=None, time_range=None):
+def process_combined_profiles(
+    account_id: str,
+    profiles: List[str],
+    user_regions: Optional[List[str]] = None,
+    time_range: Optional[int] = None,
+) -> ProfileData:
     """Process multiple profiles from the same AWS account."""
     console.log(
         f"[cyan]Processing combined profiles for account {account_id}: {', '.join(profiles)}...[/]"
@@ -100,10 +111,10 @@ def process_combined_profiles(account_id, profiles, user_regions=None, time_rang
 
     primary_session = boto3.Session(profile_name=primary_profile)
 
-    combined_current_month = 0
-    combined_last_month = 0
-    combined_service_costs = defaultdict(float)
-    combined_budgets = []
+    combined_current_month: float = 0.0
+    combined_last_month: float = 0.0
+    combined_service_costs: Dict[str, float] = defaultdict(float)
+    combined_budgets: List[BudgetInfo] = []
 
     try:
         account_cost_data = get_cost_data(primary_session, time_range)
@@ -175,8 +186,9 @@ def process_combined_profiles(account_id, profiles, user_regions=None, time_rang
 
 
 def create_display_table(
-    previous_period_name="Last Month Due", current_period_name="Current Month Cost"
-):
+    previous_period_name: str = "Last Month Due",
+    current_period_name: str = "Current Month Cost",
+) -> Table:
     """Create and configure the display table with dynamic column names."""
     return Table(
         "AWS Account Profile",
@@ -193,7 +205,7 @@ def create_display_table(
     )
 
 
-def add_profile_to_table(table, profile_data):
+def add_profile_to_table(table: Table, profile_data: ProfileData) -> None:
     """Add profile data to the display table."""
     if profile_data["success"]:
         table.add_row(
@@ -217,7 +229,7 @@ def add_profile_to_table(table, profile_data):
         )
 
 
-def run_dashboard(args):
+def run_dashboard(args: argparse.Namespace) -> int:
     """Main function to run the AWS FinOps dashboard."""
     export_data = []
 
@@ -346,7 +358,7 @@ def run_dashboard(args):
     return 0
 
 
-def main():
+def main() -> int:
     """Entry point for the module when run directly."""
     from aws_finops_dashboard.cli import parse_args
 
