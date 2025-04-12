@@ -167,11 +167,23 @@ The exact cost per run is usually negligible but depends on the scale of your us
 Open to contributions! Feel free to fork and contribute.
 
 ```bash
-# If you haven't already cloned it
-git clone https://github.com/ravikiranvm/aws-finops-dashboard
+# Fork this repository on GitHub first:
+# https://github.com/ravikiranvm/aws-finops-dashboard
+
+# Then clone your fork locally
+git clone https://github.com/your-username/aws-finops-dashboard.git
 cd aws-finops-dashboard
+
+# (Optional) Create and activate a virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows use `venv\Scripts\activate`
+
+# Install dependencies
 pip install -r requirements.txt
+
+# Run the tool
 python dashboard.py --help
+
 ```
 
 ---
