@@ -7,8 +7,8 @@ requires-python = ">=3.8"
 license = {text = "MIT"}
 authors = [{name = "Ravi Kiran Vallamkonda"}]
 dependencies = [
-    "boto3",
-    "rich"
+    "boto3>=1.37.28",
+    "rich>=14.0.0",
 ]
 keywords = ["aws", "finops", "dashboard", "cli", "cloud", "cost"]
 
@@ -17,7 +17,7 @@ keywords = ["aws", "finops", "dashboard", "cli", "cloud", "cost"]
 "Source" = "https://github.com/ravikiranvm/aws-finops-dashboard"
 
 [project.scripts]
-aws-finops = "aws_finops_dashboard.dashboard:main"
+aws-finops = "aws_finops_dashboard.cli:main"
 
 [build-system]
 requires = ["hatchling"]
