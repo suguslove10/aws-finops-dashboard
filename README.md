@@ -165,7 +165,7 @@ You'll see a live-updating table of your AWS account cost and usage details in t
 
 ## Example Terminal Output
 
-![Dashboard Screenshot](dashboard_image.png)
+![Dashboard Image](AWS-FinOps-Dashboard-CLI-v2.2.0-Image.png)
 
 ---
 
