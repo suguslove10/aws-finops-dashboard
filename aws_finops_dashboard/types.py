@@ -23,6 +23,11 @@ class CostData(TypedDict):
     current_period_name: str
     previous_period_name: str
     time_range: Optional[int]
+    current_period_start: str
+    current_period_end: str
+    previous_period_start: str
+    previous_period_end: str   
+
 
 
 class ProfileData(TypedDict):

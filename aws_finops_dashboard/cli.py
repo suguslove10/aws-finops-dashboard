@@ -1,5 +1,27 @@
 import argparse
 import sys
+from rich.console import Console
+
+console = Console()
+
+def welcome_banner() -> None:
+    banner = """
+[bold red]
+  /$$$$$$  /$$      /$$  /$$$$$$        /$$$$$$$$ /$$            /$$$$$$                     
+ /$$__  $$| $$  /$ | $$ /$$__  $$      | $$_____/|__/           /$$__  $$                    
+| $$  \ $$| $$ /$$$| $$| $$  \__/      | $$       /$$ /$$$$$$$ | $$  \ $$  /$$$$$$   /$$$$$$$
+| $$$$$$$$| $$/$$ $$ $$|  $$$$$$       | $$$$$   | $$| $$__  $$| $$  | $$ /$$__  $$ /$$_____/
+| $$__  $$| $$$$_  $$$$ \____  $$      | $$__/   | $$| $$  \ $$| $$  | $$| $$  \ $$|  $$$$$$ 
+| $$  | $$| $$$/ \  $$$ /$$  \ $$      | $$      | $$| $$  | $$| $$  | $$| $$  | $$ \____  $$
+| $$  | $$| $$/   \  $$|  $$$$$$/      | $$      | $$| $$  | $$|  $$$$$$/| $$$$$$$/ /$$$$$$$/
+|__/  |__/|__/     \__/ \______/       |__/      |__/|__/  |__/ \______/ | $$____/ |_______/ 
+                                                                         | $$                
+                                                                         | $$                
+                                                                         |__/                
+[/]
+[bold bright_blue]AWS FinOps Dashboard CLI (v2.2.0)[/]                                                                         
+"""
+    console.print(banner)
 
 
 def parse_args() -> argparse.Namespace:
@@ -63,6 +85,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     """Command-line interface entry point."""
+    welcome_banner()
     from aws_finops_dashboard.main import run_dashboard
 
     args = parse_args()

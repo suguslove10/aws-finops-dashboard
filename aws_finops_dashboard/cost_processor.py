@@ -4,6 +4,8 @@ import os
 from datetime import date, datetime, timedelta
 from typing import List, Optional, Tuple
 
+from collections import defaultdict
+
 from boto3.session import Session
 from rich.console import Console
 
@@ -31,13 +33,11 @@ def get_cost_data(session: Session, time_range: Optional[int] = None) -> CostDat
         previous_period_end = start_date - timedelta(days=1)
         previous_period_start = previous_period_end - timedelta(days=time_range)
 
-        console.log(
-            f"[cyan]Using custom time range: {start_date.isoformat()} to {end_date.isoformat()} ({time_range} days)[/]"
-        )
     else:
         start_date = today.replace(day=1)
         end_date = today
 
+        # Last calendar month
         previous_period_end = start_date - timedelta(days=1)
         previous_period_start = previous_period_end.replace(day=1)
 
@@ -71,13 +71,35 @@ def get_cost_data(session: Session, time_range: Optional[int] = None) -> CostDat
     try:
         current_period_cost_by_service = ce.get_cost_and_usage(
             TimePeriod={"Start": start_date.isoformat(), "End": end_date.isoformat()},
-            Granularity="MONTHLY",
+            Granularity="DAILY" if time_range else "MONTHLY",
             Metrics=["UnblendedCost"],
             GroupBy=[{"Type": "DIMENSION", "Key": "SERVICE"}],
         )
     except Exception as e:
         console.log(f"[yellow]Error getting current period cost by service: {e}[/]")
         current_period_cost_by_service = {"ResultsByTime": [{"Groups": []}]}
+
+    # Aggregate cost by service across all days
+    aggregated_service_costs = defaultdict(float)
+
+    for result in current_period_cost_by_service.get("ResultsByTime", []):
+        for group in result.get("Groups", []):
+            service = group["Keys"][0]
+            amount = float(group["Metrics"]["UnblendedCost"]["Amount"])
+            aggregated_service_costs[service] += amount
+
+    # Reformat into groups by service
+    aggregated_groups = [
+        {
+            "Keys": [service],
+            "Metrics": {
+                "UnblendedCost": {
+                    "Amount": str(amount)
+                }
+            }
+        }
+        for service, amount in aggregated_service_costs.items()
+    ]
 
     budgets_data: List[BudgetInfo] = []
     try:
@@ -111,21 +133,23 @@ def get_cost_data(session: Session, time_range: Optional[int] = None) -> CostDat
             previous_period_cost += float(period["Total"]["UnblendedCost"]["Amount"])
 
     current_period_name = (
-        f"Current {time_range} days" if time_range else "Current month"
+        f"Current {time_range} days cost" if time_range else "Current month's cost"
     )
-    previous_period_name = f"Previous {time_range} days" if time_range else "Last month"
+    previous_period_name = f"Previous {time_range} days cost" if time_range else "Last month's cost"
 
     return {
         "account_id": account_id,
         "current_month": current_period_cost,
         "last_month": previous_period_cost,
-        "current_month_cost_by_service": current_period_cost_by_service.get(
-            "ResultsByTime", [{}]
-        )[0].get("Groups", []),
+        "current_month_cost_by_service": aggregated_groups,
         "budgets": budgets_data,
         "current_period_name": current_period_name,
         "previous_period_name": previous_period_name,
         "time_range": time_range,
+        "current_period_start": start_date.isoformat(),
+        "current_period_end": end_date.isoformat(),
+        "previous_period_start": previous_period_start.isoformat(),
+        "previous_period_end": previous_period_end.isoformat(),
     }
 
 
@@ -182,7 +206,11 @@ def format_ec2_summary(ec2_data: EC2Summary) -> List[str]:
 
 
 def export_to_csv(
-    data: List[ProfileData], filename: str, output_dir: Optional[str] = None
+    data: List[ProfileData], 
+    filename: str, 
+    output_dir: Optional[str] = None,
+    previous_period_dates: str = "N/A",
+    current_period_dates: str = "N/A",
 ) -> Optional[str]:
     """Export dashboard data to a CSV file."""
     try:
@@ -195,11 +223,15 @@ def export_to_csv(
         else:
             output_filename = base_filename
 
+        previous_period_header = f"Cost for period\n({previous_period_dates})"
+        current_period_header = f"Cost for period\n({current_period_dates})" 
+
         with open(output_filename, "w", newline="") as csvfile:
             fieldnames = [
                 "CLI Profile",
                 "AWS Account ID",
-                "Last Month Cost",
+                previous_period_header,
+                current_period_header,
                 "Current Month Cost",
                 "Cost By Service",
                 "Budget Status",
@@ -234,8 +266,8 @@ def export_to_csv(
                     {
                         "CLI Profile": row["profile"],
                         "AWS Account ID": row["account_id"],
-                        "Last Month Cost": f"${row['last_month']:.2f}",
-                        "Current Month Cost": f"${row['current_month']:.2f}",
+                        previous_period_header: f"${row['last_month']:.2f}",
+                        current_period_header: f"${row['current_month']:.2f}",
                         "Cost By Service": services_data or "No costs",
                         "Budget Status": budgets_data or "No budgets",
                         "EC2 Instances": ec2_data_summary or "No instances",

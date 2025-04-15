@@ -6,8 +6,9 @@ from typing import Dict, List, Optional
 import boto3
 from rich import box
 from rich.console import Console
-from rich.live import Live
 from rich.table import Column, Table
+from rich.progress import Progress, track
+from rich.status import Status
 
 from aws_finops_dashboard.aws_client import (
     ec2_summary,
@@ -34,8 +35,6 @@ def process_single_profile(
     time_range: Optional[int] = None,
 ) -> ProfileData:
     """Process a single AWS profile and return its data."""
-    console.log(f"[cyan]Processing profile: {profile}...[/]")
-
     try:
         session = boto3.Session(profile_name=profile)
         cost_data = get_cost_data(session, time_range)
@@ -44,17 +43,12 @@ def process_single_profile(
             profile_regions = user_regions
         else:
             profile_regions = get_accessible_regions(session)
-            console.log(
-                f"[cyan]Profile {profile} - Using regions: {', '.join(profile_regions)}[/]"
-            )
 
         ec2_data = ec2_summary(session, profile_regions)
         service_costs, service_cost_data = process_service_costs(cost_data)
         budget_info = format_budget_info(cost_data["budgets"])
         account_id = cost_data.get("account_id", "Unknown") or "Unknown"
         ec2_summary_text = format_ec2_summary(ec2_data)
-
-        console.log(f"[bright_cyan]Processing profile: {profile} completed[/]")
 
         return {
             "profile": profile,
@@ -75,7 +69,6 @@ def process_single_profile(
         }
 
     except Exception as e:
-        console.log(f"[bold red]Error processing profile {profile}: {str(e)}[/]")
         return {
             "profile": profile,
             "account_id": "Error",
@@ -100,14 +93,8 @@ def process_combined_profiles(
     time_range: Optional[int] = None,
 ) -> ProfileData:
     """Process multiple profiles from the same AWS account."""
-    console.log(
-        f"[cyan]Processing combined profiles for account {account_id}: {', '.join(profiles)}...[/]"
-    )
 
     primary_profile = profiles[0]
-    console.log(
-        f"[cyan]Using {primary_profile} as primary profile for EC2 discovery & cost data[/]"
-    )
 
     primary_session = boto3.Session(profile_name=primary_profile)
 
@@ -138,9 +125,6 @@ def process_combined_profiles(
         primary_regions = user_regions
     else:
         primary_regions = get_accessible_regions(primary_session)
-        console.log(
-            f"[cyan]Primary profile {primary_profile} - Using regions: {', '.join(primary_regions)}[/]"
-        )
 
     combined_ec2 = ec2_summary(primary_session, primary_regions)
 
@@ -186,14 +170,16 @@ def process_combined_profiles(
 
 
 def create_display_table(
+    previous_period_dates: str,
+    current_period_dates: str,
     previous_period_name: str = "Last Month Due",
     current_period_name: str = "Current Month Cost",
 ) -> Table:
     """Create and configure the display table with dynamic column names."""
     return Table(
         "AWS Account Profile",
-        Column(previous_period_name, justify="right"),
-        Column(current_period_name, justify="right"),
+        Column(f"{previous_period_name}\n({previous_period_dates})", justify="center"),
+        Column(f"{current_period_name}\n({current_period_dates})", justify="center"),
         Column("Cost By Service"),
         Column("Budget Status"),
         Column("EC2 Instance Summary", justify="center"),
@@ -233,69 +219,70 @@ def run_dashboard(args: argparse.Namespace) -> int:
     """Main function to run the AWS FinOps dashboard."""
     export_data = []
 
-    available_profiles = get_aws_profiles()
+    with Status("[bright_cyan]Initialising...", spinner="aesthetic", speed=0.4):
+        available_profiles = get_aws_profiles()
 
-    if not available_profiles:
-        console.print(
-            "[bold red]No AWS profiles found. Please configure AWS CLI first.[/]"
-        )
-        return 1
-
-    profiles_to_use = []
-    if args.profiles:
-        for profile in args.profiles:
-            if profile in available_profiles:
-                profiles_to_use.append(profile)
-            else:
-                console.print(
-                    f"[yellow]Warning: Profile '{profile}' not found in AWS configuration[/]"
-                )
-
-        if not profiles_to_use:
-            console.print(
-                "[bold red]None of the specified profiles were found in AWS configuration.[/]"
+        if not available_profiles:
+            console.log(
+                "[bold red]No AWS profiles found. Please configure AWS CLI first.[/]"
             )
             return 1
-    elif args.all:
-        profiles_to_use = available_profiles
-    else:
-        if "default" in available_profiles:
-            profiles_to_use = ["default"]
-        else:
+
+        profiles_to_use = []
+        if args.profiles:
+            for profile in args.profiles:
+                if profile in available_profiles:
+                    profiles_to_use.append(profile)
+                else:
+                    console.log(
+                        f"[yellow]Warning: Profile '{profile}' not found in AWS configuration[/]"
+                    )
+
+            if not profiles_to_use:
+                console.log(
+                    "[bold red]None of the specified profiles were found in AWS configuration.[/]"
+                )
+                return 1
+        elif args.all:
             profiles_to_use = available_profiles
-            console.print(
-                "[yellow]No default profile found. Using all available profiles.[/]"
-            )
+        else:
+            if "default" in available_profiles:
+                profiles_to_use = ["default"]
+            else:
+                profiles_to_use = available_profiles
+                console.log(
+                    "[yellow]No default profile found. Using all available profiles.[/]"
+                )
 
-    user_regions = args.regions
-    time_range = args.time_range
+        user_regions = args.regions
+        time_range = args.time_range
 
-    if time_range:
-        console.print(
-            f"[cyan]Using time range of {time_range} days for cost analysis[/]"
-        )
-
-    if profiles_to_use:
-        try:
-            sample_session = boto3.Session(profile_name=profiles_to_use[0])
-            sample_cost_data = get_cost_data(sample_session, time_range)
-            previous_period_name = sample_cost_data.get(
-                "previous_period_name", "Last Month Due"
-            )
-            current_period_name = sample_cost_data.get(
-                "current_period_name", "Current Month Cost"
-            )
-        except Exception:
+        if profiles_to_use:
+            try:
+                sample_session = boto3.Session(profile_name=profiles_to_use[0])
+                sample_cost_data = get_cost_data(sample_session, time_range)
+                previous_period_name = sample_cost_data.get(
+                    "previous_period_name", "Last Month Due"
+                )
+                current_period_name = sample_cost_data.get(
+                    "current_period_name", "Current Month Cost"
+                )
+                previous_period_dates = f"{sample_cost_data['previous_period_start']} to {sample_cost_data['previous_period_end']}"
+                current_period_dates = f"{sample_cost_data['current_period_start']} to {sample_cost_data['current_period_end']}"
+            except Exception:
+                previous_period_name = "Last Month Due"
+                current_period_name = "Current Month Cost"
+                previous_period_dates = "N/A"
+                current_period_dates = "N/A"
+        else:
             previous_period_name = "Last Month Due"
             current_period_name = "Current Month Cost"
-    else:
-        previous_period_name = "Last Month Due"
-        current_period_name = "Current Month Cost"
+            previous_period_dates = "N/A"
+            current_period_dates = "N/A"
 
-    table = create_display_table(previous_period_name, current_period_name)
+        table = create_display_table(previous_period_dates, current_period_dates, previous_period_name, current_period_name)
 
     if args.combine:
-        console.log("[cyan]Checking account IDs for profiles...[/]")
         account_profiles = defaultdict(list)
         profile_account_map = {}
 
@@ -306,9 +293,6 @@ def run_dashboard(args: argparse.Namespace) -> int:
                 if account_id:
                     account_profiles[account_id].append(profile)
                     profile_account_map[profile] = account_id
-                    console.log(
-                        f"[cyan]Profile {profile} belongs to account {account_id}[/]"
-                    )
                 else:
                     console.log(
                         f"[yellow]Could not determine account ID for profile {profile}[/]"
@@ -318,32 +302,37 @@ def run_dashboard(args: argparse.Namespace) -> int:
                     f"[bold red]Error checking account ID for profile {profile}: {str(e)}[/]"
                 )
 
-        for account_id, profiles in account_profiles.items():
+        for account_id, profiles in track(account_profiles.items(), description="[bright_cyan]Fetching cost data..."):
             if len(profiles) > 1:
                 profile_data = process_combined_profiles(
                     account_id, profiles, user_regions, time_range
                 )
-                export_data.append(profile_data)
             else:
                 profile_data = process_single_profile(
                     profiles[0], user_regions, time_range
                 )
-                export_data.append(profile_data)
+            export_data.append(profile_data)
+            add_profile_to_table(table, profile_data)
+            
+
     else:
-        for profile in profiles_to_use:
+        
+        for profile in track(profiles_to_use, description="[bright_cyan]Fetching cost data..."):
             profile_data = process_single_profile(profile, user_regions, time_range)
             export_data.append(profile_data)
+            add_profile_to_table(table, profile_data)
 
-    for profile_data in export_data:
-        add_profile_to_table(table, profile_data)
-
-    with Live(table, console=console, refresh_per_second=1):
-        pass
+    console.print(table)
 
     if args.report_name and args.report_type:
         for report_type in args.report_type:
             if report_type == "csv":
-                csv_path = export_to_csv(export_data, args.report_name, args.dir)
+                csv_path = export_to_csv(
+                    export_data, 
+                    args.report_name, 
+                    args.dir,
+                    previous_period_dates=previous_period_dates,
+                    current_period_dates=current_period_dates,)
                 if csv_path:
                     console.print(
                         f"[bright_green]Successfully exported to CSV format: {csv_path}[/]"

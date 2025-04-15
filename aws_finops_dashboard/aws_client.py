@@ -31,7 +31,12 @@ def get_account_id(session: Session) -> Optional[str]:
 
 
 def get_all_regions(session: Session) -> List[RegionName]:
-    """Get all available AWS regions."""
+    """
+    Get all available AWS regions.
+    Using us-east-1 as a default region to get the list of all regions.
+
+    If the call fails, it will return a hardcoded list of common regions.
+    """
     try:
         ec2_client = session.client("ec2", region_name="us-east-1")
         regions = [
