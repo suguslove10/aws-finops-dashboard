@@ -1,4 +1,4 @@
-# AWS FinOps Dashboard (CLI) v2.2.0
+# AWS FinOps Dashboard (CLI) v2.2.2
 
 [![PyPI version](https://img.shields.io/pypi/v/aws-finops-dashboard.svg)](https://pypi.org/project/aws-finops-dashboard/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -16,6 +16,7 @@ It provides an overview of AWS spend by profile, service-level breakdowns, budge
   - View current & previous month's spend by default
   - Set custom time ranges (e.g., 7, 30, 90 days) with `--time-range` option
 - **Cost by AWS Service**: Sorted by highest cost for better insights
+- **Cost by Tag**: Get the cost data by one or more tags with `--tag`(cost allocation tags must be enabled)
 - **AWS Budgets Information**: Displays budget limits and actual spend
 - **EC2 Instance Status**: Detailed state information across specified/accessible regions
 - **Profile Management**:
@@ -121,6 +122,7 @@ aws-finops [options]
 | `--regions`, `-r` | Specific AWS regions to check for EC2 instances (space-separated). If omitted, attempts to check all accessible regions. |
 | `--all`, `-a` | Use all available AWS profiles found in your config. |
 | `--combine`, `-c` | Combine profiles from the same AWS account into single rows. |
+| `--tag`, `-g` | Filter cost data by one or more cost allocation tags in `Key=Value` format. Example: `--tag Team=DevOps Env=Prod` |
 | `--report-name`, `-n` | Specify the base name for the report file (without extension). |
 | `--report-type`, `-y` | Specify one or more report types (space-separated): 'csv' and/or 'json'. |
 | `--dir`, `-d` | Directory to save the report file(s) (default: current directory). |
@@ -146,6 +148,12 @@ aws-finops --regions us-east-1 eu-west-1 ap-southeast-2
 
 # View cost data for the last 30 days instead of current month
 aws-finops --time-range 30
+
+# View cost data only for a specific tag (e.g., Team=DevOps)
+aws-finops --tag Team=DevOps
+
+# View cost data for multiple tags (e.g., Team=DevOps and Env=Prod)
+aws-finops --tag Team=Devops Env=Prod
 
 # Export data to CSV only
 aws-finops --all --report-name aws_dashboard_data --report-type csv
@@ -194,7 +202,7 @@ When exporting to JSON, a structured file is generated that includes all dashboa
 
 ## Cost For Every Run
 
-This script makes API calls to AWS, primarily to Cost Explorer, Budgets, EC2, and STS. AWS may charge for some API calls (e.g., `$0.01` per 1,000 `GetCostAndUsage` requests beyond the free tier, check current pricing).
+This script makes API calls to AWS, primarily to Cost Explorer, Budgets, EC2, and STS. AWS may charge for some API calls (typically `$0.01` for each API call, check current pricing).
 
 The number of API calls depends heavily on the options used:
 

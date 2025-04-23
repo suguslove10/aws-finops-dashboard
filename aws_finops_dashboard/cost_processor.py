@@ -15,17 +15,52 @@ from aws_finops_dashboard.types import BudgetInfo, CostData, EC2Summary, Profile
 console = Console()
 
 
-def get_cost_data(session: Session, time_range: Optional[int] = None) -> CostData:
+def get_cost_data(session: Session, time_range: Optional[int] = None, tag: Optional[list[str]] = None) -> CostData:
     """
     Get cost data for an AWS account.
 
     Args:
         session: The boto3 session to use
         time_range: Optional time range in days for cost data (default: current month)
+        tag: Optional list of tags in "Key=Value" format to filter resources.
+
     """
     ce = session.client("ce")
     budgets = session.client("budgets", region_name="us-east-1")
     today = date.today()
+
+    tag_filters = []
+    if tag:
+        for t in tag:
+            key, value = t.split("=", 1)
+            tag_filters.append(
+                {
+                    "Key": key,
+                    "Values": [value]
+                }
+            )
+
+    filter_param = None
+    if tag_filters:
+        if len(tag_filters) == 1:
+            filter_param = {
+                "Tags": {
+                    "Key": tag_filters[0]["Key"],
+                    "Values": tag_filters[0]["Values"],
+                    "MatchOptions": ["EQUALS"],
+                }
+            }
+
+        else:
+            filter_param = {
+                "And":[
+                    {"Tags": {"Key": f["Key"], "Values": f["Values"], "MatchOptions": ["EQUALS"]}}
+                    for f in tag_filters
+                ]
+            }
+    kwargs = {}
+    if filter_param:
+        kwargs["Filter"] = filter_param
 
     if time_range:
         end_date = today
@@ -48,6 +83,7 @@ def get_cost_data(session: Session, time_range: Optional[int] = None) -> CostDat
             TimePeriod={"Start": start_date.isoformat(), "End": end_date.isoformat()},
             Granularity="MONTHLY",
             Metrics=["UnblendedCost"],
+            **kwargs,
         )
     except Exception as e:
         console.log(f"[yellow]Error getting current period cost: {e}[/]")
@@ -61,6 +97,7 @@ def get_cost_data(session: Session, time_range: Optional[int] = None) -> CostDat
             },
             Granularity="MONTHLY",
             Metrics=["UnblendedCost"],
+            **kwargs,
         )
     except Exception as e:
         console.log(f"[yellow]Error getting previous period cost: {e}[/]")
@@ -74,6 +111,7 @@ def get_cost_data(session: Session, time_range: Optional[int] = None) -> CostDat
             Granularity="DAILY" if time_range else "MONTHLY",
             Metrics=["UnblendedCost"],
             GroupBy=[{"Type": "DIMENSION", "Key": "SERVICE"}],
+            **kwargs,
         )
     except Exception as e:
         console.log(f"[yellow]Error getting current period cost by service: {e}[/]")
@@ -119,7 +157,6 @@ def get_cost_data(session: Session, time_range: Optional[int] = None) -> CostDat
                 }
             )
     except Exception as e:
-        console.log(f"[yellow]Error getting budget data: {e}[/]")
         pass
 
     current_period_cost = 0.0
@@ -184,6 +221,14 @@ def format_budget_info(budgets: List[BudgetInfo]) -> List[str]:
     for budget in budgets:
         budget_info.append(f"{budget['name']} limit: ${budget['limit']}")
         budget_info.append(f"{budget['name']} actual: ${budget['actual']:.2f}")
+        if budget["forecast"] is not None:
+            budget_info.append(
+                f"{budget['name']} forecast: ${budget['forecast']:.2f}"
+            )
+
+    if not budget_info:
+        budget_info.append("No budgets found;\nCreate a budget for this account")
+
     return budget_info
 
 
