@@ -1,6 +1,8 @@
 import argparse
 import sys
 from rich.console import Console
+import requests
+from packaging import version
 
 console = Console()
 
@@ -19,7 +21,7 @@ def welcome_banner() -> None:
                                                                          | $$                
                                                                          |__/                
 [/]
-[bold bright_blue]AWS FinOps Dashboard CLI (v2.2.0)[/]                                                                         
+[bold bright_blue]AWS FinOps Dashboard CLI (v2.2.2)[/]                                                                         
 """
     console.print(banner)
 
@@ -80,12 +82,37 @@ def parse_args() -> argparse.Namespace:
         type=int,
     )
 
+    parser.add_argument(
+        "--tag",
+        "-g",
+        nargs="+",
+        help="Cost allocation tag to filter resources, e.g., --tag Team=DevOps",
+        type=str,
+    )
+
     return parser.parse_args()
+
+__version__ = "2.2.2"
+def check_latest_version() -> None:
+    """Check for the latest version of the AWS FinOps Dashboard (CLI)."""
+    try:
+        response = requests.get("https://pypi.org/pypi/aws-finops-dashboard/json", timeout=3)
+        latest = response.json()["info"]["version"]
+        if version.parse(latest) > version.parse(__version__):
+            console.print(
+                f"[bold red]A new version of AWS FinOps Dashboard is available: {latest}[/]"
+            )
+            console.print(
+                "[bold bright_yellow]Please update using:\npipx upgrade aws-finops-dashboard\nor\npip install --upgrade aws-finops-dashboard\n[/]"
+            )
+    except Exception:
+        pass
 
 
 def main() -> int:
     """Command-line interface entry point."""
     welcome_banner()
+    check_latest_version()
     from aws_finops_dashboard.main import run_dashboard
 
     args = parse_args()

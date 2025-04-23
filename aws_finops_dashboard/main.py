@@ -33,11 +33,12 @@ def process_single_profile(
     profile: str,
     user_regions: Optional[List[str]] = None,
     time_range: Optional[int] = None,
+    tag: Optional[List[str]] = None,
 ) -> ProfileData:
     """Process a single AWS profile and return its data."""
     try:
         session = boto3.Session(profile_name=profile)
-        cost_data = get_cost_data(session, time_range)
+        cost_data = get_cost_data(session, time_range, tag)
 
         if user_regions:
             profile_regions = user_regions
@@ -91,6 +92,7 @@ def process_combined_profiles(
     profiles: List[str],
     user_regions: Optional[List[str]] = None,
     time_range: Optional[int] = None,
+    tag: Optional[List[str]] = None,
 ) -> ProfileData:
     """Process multiple profiles from the same AWS account."""
 
@@ -104,7 +106,7 @@ def process_combined_profiles(
     combined_budgets: List[BudgetInfo] = []
 
     try:
-        account_cost_data = get_cost_data(primary_session, time_range)
+        account_cost_data = get_cost_data(primary_session, time_range, tag)
         combined_current_month = account_cost_data["current_month"]
         combined_last_month = account_cost_data["last_month"]
         combined_service_costs = defaultdict(float)
@@ -201,7 +203,7 @@ def add_profile_to_table(table: Table, profile_data: ProfileData) -> None:
             "[bright_green]"
             + "\n".join(profile_data["service_costs_formatted"])
             + "[/]",
-            "[bright_yellow]" + "\n".join(profile_data["budget_info"]) + "[/]",
+            "[bright_yellow]" + "\n\n".join(profile_data["budget_info"]) + "[/]",
             "\n".join(profile_data["ec2_summary_formatted"]),
         )
     else:
@@ -305,11 +307,11 @@ def run_dashboard(args: argparse.Namespace) -> int:
         for account_id, profiles in track(account_profiles.items(), description="[bright_cyan]Fetching cost data..."):
             if len(profiles) > 1:
                 profile_data = process_combined_profiles(
-                    account_id, profiles, user_regions, time_range
+                    account_id, profiles, user_regions, time_range, args.tag
                 )
             else:
                 profile_data = process_single_profile(
-                    profiles[0], user_regions, time_range
+                    profiles[0], user_regions, time_range, args.tag
                 )
             export_data.append(profile_data)
             add_profile_to_table(table, profile_data)
@@ -318,7 +320,7 @@ def run_dashboard(args: argparse.Namespace) -> int:
     else:
         
         for profile in track(profiles_to_use, description="[bright_cyan]Fetching cost data..."):
-            profile_data = process_single_profile(profile, user_regions, time_range)
+            profile_data = process_single_profile(profile, user_regions, time_range, args.tag)
             export_data.append(profile_data)
             add_profile_to_table(table, profile_data)
 
