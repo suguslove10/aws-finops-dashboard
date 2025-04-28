@@ -23,6 +23,7 @@ from aws_finops_dashboard.cost_processor import (
     format_ec2_summary,
     get_cost_data,
     process_service_costs,
+    change_in_total_cost,
 )
 from aws_finops_dashboard.types import BudgetInfo, ProfileData
 
@@ -50,6 +51,9 @@ def process_single_profile(
         budget_info = format_budget_info(cost_data["budgets"])
         account_id = cost_data.get("account_id", "Unknown") or "Unknown"
         ec2_summary_text = format_ec2_summary(ec2_data)
+        percent_change_in_total_cost = change_in_total_cost(
+            cost_data["current_month"], cost_data["last_month"]
+        )
 
         return {
             "profile": profile,
@@ -67,6 +71,7 @@ def process_single_profile(
                 "current_period_name", "Current month"
             ),
             "previous_period_name": cost_data.get("previous_period_name", "Last month"),
+            "percent_change_in_total_cost": percent_change_in_total_cost,
         }
 
     except Exception as e:
@@ -150,6 +155,10 @@ def process_combined_profiles(
 
     profile_list = ", ".join(profiles)
 
+    percent_change_in_total_cost = change_in_total_cost(
+        combined_current_month, combined_last_month
+    )
+
     return {
         "profile": profile_list,
         "account_id": account_id,
@@ -168,6 +177,7 @@ def process_combined_profiles(
         "previous_period_name": account_cost_data.get(
             "previous_period_name", "Last month"
         ),
+        "percent_change_in_total_cost": percent_change_in_total_cost,
     }
 
 
@@ -179,12 +189,12 @@ def create_display_table(
 ) -> Table:
     """Create and configure the display table with dynamic column names."""
     return Table(
-        "AWS Account Profile",
-        Column(f"{previous_period_name}\n({previous_period_dates})", justify="center"),
-        Column(f"{current_period_name}\n({current_period_dates})", justify="center"),
-        Column("Cost By Service"),
-        Column("Budget Status"),
-        Column("EC2 Instance Summary", justify="center"),
+        Column("AWS Account Profile", justify="center", vertical="middle"),
+        Column(f"{previous_period_name}\n({previous_period_dates})", justify="center", vertical="middle"),
+        Column(f"{current_period_name}\n({current_period_dates})", justify="center", vertical="middle"),
+        Column("Cost By Service", vertical="middle"),
+        Column("Budget Status", vertical="middle"),
+        Column("EC2 Instance Summary", justify="center", vertical="middle"),
         title="AWS FinOps Dashboard",
         caption="AWS FinOps Dashboard CLI",
         box=box.ASCII_DOUBLE_HEAD,
@@ -196,10 +206,23 @@ def create_display_table(
 def add_profile_to_table(table: Table, profile_data: ProfileData) -> None:
     """Add profile data to the display table."""
     if profile_data["success"]:
+        percentage_change = profile_data.get("percent_change_in_total_cost")
+        change_text = ""
+
+        if percentage_change is not None:
+            if percentage_change > 0:
+                change_text = f"\n\n[bright_red]⬆ {percentage_change:.2f}%"
+            elif percentage_change < 0:
+                change_text = f"\n\n[bright_green]⬇ {abs(percentage_change):.2f}%"
+            elif percentage_change == 0:
+                change_text = "\n\n[bright_yellow]➡ 0.00%[/]"
+
+        current_month_with_change = f"[bold red]${profile_data['current_month']:.2f}[/]{change_text}"
+            
         table.add_row(
-            f"[bright_magenta]{profile_data['profile']}\nAccount: {profile_data['account_id']}[/]",
-            f"[bright_red]${profile_data['last_month']:.2f}[/]",
-            f"[bright_green]${profile_data['current_month']:.2f}[/]",
+            f"[bright_magenta]Profile: {profile_data['profile']}\nAccount: {profile_data['account_id']}[/]",
+            f"[bold red]${profile_data['last_month']:.2f}[/]",
+            current_month_with_change,
             "[bright_green]"
             + "\n".join(profile_data["service_costs_formatted"])
             + "[/]",

@@ -7,7 +7,7 @@ from packaging import version
 console = Console()
 
 def welcome_banner() -> None:
-    banner = """
+    banner = r"""
 [bold red]
   /$$$$$$  /$$      /$$  /$$$$$$        /$$$$$$$$ /$$            /$$$$$$                     
  /$$__  $$| $$  /$ | $$ /$$__  $$      | $$_____/|__/           /$$__  $$                    
@@ -114,7 +114,7 @@ def main() -> int:
     welcome_banner()
     check_latest_version()
     from aws_finops_dashboard.main import run_dashboard
-
+        
     args = parse_args()
     result = run_dashboard(args)
     return 0 if result == 0 else 1

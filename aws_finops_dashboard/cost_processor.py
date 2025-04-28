@@ -249,6 +249,15 @@ def format_ec2_summary(ec2_data: EC2Summary) -> List[str]:
 
     return ec2_summary_text
 
+def change_in_total_cost(current_period: float, previous_period: float) -> Optional[float]:
+    """Calculate the  change in total cost between current period and previous period."""
+    if abs(previous_period) < 0.01:
+        if abs(current_period) < 0.01:
+            return 0.00  # No change if both periods are zero
+        return None  # Undefined percentage change if previous is zero but current is non-zero
+
+    # Calculate percentage change
+    return ((current_period - previous_period) / previous_period) * 100.00
 
 def export_to_csv(
     data: List[ProfileData], 
