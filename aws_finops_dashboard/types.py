@@ -27,6 +27,7 @@ class CostData(TypedDict):
     current_period_end: str
     previous_period_start: str
     previous_period_end: str   
+    monthly_costs: List[Tuple[str, float]]
 
 
 

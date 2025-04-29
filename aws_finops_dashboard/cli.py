@@ -3,11 +3,13 @@ import sys
 from rich.console import Console
 import requests
 from packaging import version
+import sys
+import io
 
 console = Console()
 
 def welcome_banner() -> None:
-    banner = """
+    banner = r"""
 [bold red]
   /$$$$$$  /$$      /$$  /$$$$$$        /$$$$$$$$ /$$            /$$$$$$                     
  /$$__  $$| $$  /$ | $$ /$$__  $$      | $$_____/|__/           /$$__  $$                    
@@ -88,6 +90,12 @@ def parse_args() -> argparse.Namespace:
         nargs="+",
         help="Cost allocation tag to filter resources, e.g., --tag Team=DevOps",
         type=str,
+    )
+
+    parser.add_argument(
+        "--trend",
+        action="store_true",
+        help="Display a trend report as bars for the past 6 months time range",
     )
 
     return parser.parse_args()

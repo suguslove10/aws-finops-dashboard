@@ -7,7 +7,7 @@ import boto3
 from rich import box
 from rich.console import Console
 from rich.table import Column, Table
-from rich.progress import Progress, track
+from rich.progress import track
 from rich.status import Status
 
 from aws_finops_dashboard.aws_client import (
@@ -25,9 +25,9 @@ from aws_finops_dashboard.cost_processor import (
     process_service_costs,
 )
 from aws_finops_dashboard.types import BudgetInfo, ProfileData
+from aws_finops_dashboard.visualisations import create_trend_bars
 
 console = Console()
-
 
 def process_single_profile(
     profile: str,
@@ -259,6 +259,58 @@ def run_dashboard(args: argparse.Namespace) -> int:
         user_regions = args.regions
         time_range = args.time_range
 
+
+    if args.trend:
+        console.print("[bold bright_cyan]Analysing cost trends...[/]")
+        if args.combine:
+            # Group profiles by account first
+            account_profiles = defaultdict(list)
+            for profile in profiles_to_use:
+                try:
+                    session = boto3.Session(profile_name=profile)
+                    account_id = get_account_id(session)
+                    if account_id:
+                        account_profiles[account_id].append(profile)
+                except Exception as e:
+                    console.print(f"[red]Error checking account ID for profile {profile}: {str(e)}[/]")
+            
+            # Show trends by account using primary profile for each account
+            for account_id, profiles in account_profiles.items():
+                try:
+                    primary_profile = profiles[0]  # Use first profile for the account
+                    session = boto3.Session(profile_name=primary_profile)
+                    cost_data = get_cost_data(session, get_trend=True)
+                    
+                    if not cost_data.get("monthly_costs"):
+                        console.print(f"[yellow]No trend data available for account {account_id}[/]")
+                        continue
+                    
+                    profile_list = ", ".join(profiles)
+                    console.print(f"\n[bright_yellow]Account: {account_id} (Profiles: {profile_list})[/]")
+                    create_trend_bars(cost_data["monthly_costs"])
+                    
+                except Exception as e:
+                    console.print(f"[red]Error getting trend for account {account_id}: {str(e)}[/]")
+        else:
+            # Original logic for individual profiles
+            for profile in profiles_to_use:
+                try:
+                    session = boto3.Session(profile_name=profile)
+                    cost_data = get_cost_data(session, get_trend=True)
+                    account_id = get_account_id(session)
+                    
+                    if not cost_data.get("monthly_costs"):
+                        console.print(f"[yellow]No trend data available for profile {profile}[/]")
+                        continue
+                        
+                    console.print(f"\n[bright_yellow]Account: {account_id} (Profile: {profile})[/]")
+                    create_trend_bars(cost_data["monthly_costs"])
+                    
+                except Exception as e:
+                    console.print(f"[red]Error getting trend for profile {profile}: {str(e)}[/]")
+        return 0
+    
+    with Status("[bright_cyan]Initialising dashboard...", spinner="aesthetic", speed=0.4):
         if profiles_to_use:
             try:
                 sample_session = boto3.Session(profile_name=profiles_to_use[0])

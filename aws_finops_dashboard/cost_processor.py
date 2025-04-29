@@ -2,7 +2,7 @@ import csv
 import json
 import os
 from datetime import date, datetime, timedelta
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict
 
 from collections import defaultdict
 
@@ -15,7 +15,7 @@ from aws_finops_dashboard.types import BudgetInfo, CostData, EC2Summary, Profile
 console = Console()
 
 
-def get_cost_data(session: Session, time_range: Optional[int] = None, tag: Optional[list[str]] = None) -> CostData:
+def get_cost_data(session: Session, time_range: Optional[int] = None, tag: Optional[list[str]] = None, get_trend: bool = False) -> CostData:
     """
     Get cost data for an AWS account.
 
@@ -62,7 +62,13 @@ def get_cost_data(session: Session, time_range: Optional[int] = None, tag: Optio
     if filter_param:
         kwargs["Filter"] = filter_param
 
-    if time_range:
+    if get_trend:
+        end_date = today
+        start_date = (end_date - timedelta(days=180)).replace(day=1)
+        previous_period_end = start_date - timedelta(days=1)
+        previous_period_start = previous_period_end - timedelta(days=30)
+
+    elif time_range:
         end_date = today
         start_date = today - timedelta(days=time_range)
         previous_period_end = start_date - timedelta(days=1)
@@ -139,6 +145,26 @@ def get_cost_data(session: Session, time_range: Optional[int] = None, tag: Optio
         for service, amount in aggregated_service_costs.items()
     ]
 
+    monthly_costs = []
+    if get_trend:
+        try:
+            monthly_data = ce.get_cost_and_usage(
+                TimePeriod={
+                    "Start": start_date.isoformat(),
+                    "End": end_date.isoformat(),
+                },
+                Granularity="MONTHLY",
+                Metrics=["UnblendedCost"],
+                **kwargs,
+            )
+            for period in monthly_data.get("ResultsByTime", []):
+                month = datetime.strptime(period["TimePeriod"]["Start"], "%Y-%m-%d").strftime("%b %Y")
+                cost = float(period["Total"]["UnblendedCost"]["Amount"])
+                monthly_costs.append((month, cost))
+        except Exception as e:
+            console.log(f"[yellow]Error getting monthly trend data: {e}[/]")
+            monthly_costs = []
+
     budgets_data: List[BudgetInfo] = []
     try:
         response = budgets.describe_budgets(AccountId=account_id)
@@ -187,6 +213,7 @@ def get_cost_data(session: Session, time_range: Optional[int] = None, tag: Optio
         "current_period_end": end_date.isoformat(),
         "previous_period_start": previous_period_start.isoformat(),
         "previous_period_end": previous_period_end.isoformat(),
+        "monthly_costs": monthly_costs if get_trend else [],
     }
 
 
