@@ -1,4 +1,4 @@
-# AWS FinOps Dashboard (CLI) v2.2.2
+# AWS FinOps Dashboard (CLI) v2.2.3
 
 [![PyPI version](https://img.shields.io/pypi/v/aws-finops-dashboard.svg)](https://pypi.org/project/aws-finops-dashboard/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -19,6 +19,7 @@ It provides an overview of AWS spend by profile, service-level breakdowns, budge
 - **Cost by Tag**: Get the cost data by one or more tags with `--tag`(cost allocation tags must be enabled)
 - **AWS Budgets Information**: Displays budget limits and actual spend
 - **EC2 Instance Status**: Detailed state information across specified/accessible regions
+- **Cost Trend Analysis**: View detailed cost trends in bar charts for the last 6 months across AWS profiles
 - **Profile Management**:
   - Automatic profile detection
   - Specific profile selection with `--profiles`
@@ -127,6 +128,7 @@ aws-finops [options]
 | `--report-type`, `-y` | Specify one or more report types (space-separated): 'csv' and/or 'json'. |
 | `--dir`, `-d` | Directory to save the report file(s) (default: current directory). |
 | `--time-range`, `-t` | Time range for cost data in days (default: current month). Examples: 7, 30, 90. |
+| `--trend` | View cost trend analysis for the last 6 months. |
 
 ### Examples
 
@@ -166,6 +168,12 @@ aws-finops --all --report-name aws_dashboard_data --report-type csv json
 
 # Export combined data for 'dev' and 'prod' profiles to a specific directory
 aws-finops --profiles dev prod --combine --report-name report --report-type csv --dir output_reports
+
+# View cost trend analysis as bar charts for profile 'dev' and 'prod'
+aws-finops --profiles dev prod -r us-east-1 --trend
+
+# View cost trend analysis for all cli profiles for a specific cost tag 'Team=DevOps'
+aws-finops --all --trend --tag Team=DevOps
 ```
 
 You'll see a live-updating table of your AWS account cost and usage details in the terminal. If export options are specified, a report file will also be generated upon completion.

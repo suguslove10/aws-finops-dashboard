@@ -4,7 +4,6 @@ from rich.console import Console
 import requests
 from packaging import version
 import sys
-import io
 
 console = Console()
 
@@ -23,7 +22,7 @@ def welcome_banner() -> None:
                                                                          | $$                
                                                                          |__/                
 [/]
-[bold bright_blue]AWS FinOps Dashboard CLI (v2.2.2)[/]                                                                         
+[bold bright_blue]AWS FinOps Dashboard CLI (v2.2.3)[/]                                                                         
 """
     console.print(banner)
 

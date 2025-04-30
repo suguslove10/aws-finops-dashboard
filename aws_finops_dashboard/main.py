@@ -24,6 +24,7 @@ from aws_finops_dashboard.cost_processor import (
     get_cost_data,
     process_service_costs,
     change_in_total_cost,
+    get_trend,
 )
 from aws_finops_dashboard.types import BudgetInfo, ProfileData
 from aws_finops_dashboard.visualisations import create_trend_bars
@@ -302,15 +303,16 @@ def run_dashboard(args: argparse.Namespace) -> int:
                 try:
                     primary_profile = profiles[0]  # Use first profile for the account
                     session = boto3.Session(profile_name=primary_profile)
-                    cost_data = get_cost_data(session, get_trend=True)
+                    cost_data = get_trend(session, args.tag)
+                    trend_data = cost_data.get("monthly_costs")
                     
-                    if not cost_data.get("monthly_costs"):
+                    if not trend_data:
                         console.print(f"[yellow]No trend data available for account {account_id}[/]")
                         continue
                     
                     profile_list = ", ".join(profiles)
                     console.print(f"\n[bright_yellow]Account: {account_id} (Profiles: {profile_list})[/]")
-                    create_trend_bars(cost_data["monthly_costs"])
+                    create_trend_bars(trend_data)
                     
                 except Exception as e:
                     console.print(f"[red]Error getting trend for account {account_id}: {str(e)}[/]")
@@ -319,15 +321,16 @@ def run_dashboard(args: argparse.Namespace) -> int:
             for profile in profiles_to_use:
                 try:
                     session = boto3.Session(profile_name=profile)
-                    cost_data = get_cost_data(session, get_trend=True)
-                    account_id = get_account_id(session)
+                    cost_data = get_trend(session, args.tag)
+                    trend_data = cost_data.get("monthly_costs")
+                    account_id = cost_data.get("account_id", "Unknown")
                     
-                    if not cost_data.get("monthly_costs"):
+                    if not trend_data:
                         console.print(f"[yellow]No trend data available for profile {profile}[/]")
                         continue
                         
                     console.print(f"\n[bright_yellow]Account: {account_id} (Profile: {profile})[/]")
-                    create_trend_bars(cost_data["monthly_costs"])
+                    create_trend_bars(trend_data)
                     
                 except Exception as e:
                     console.print(f"[red]Error getting trend for profile {profile}: {str(e)}[/]")
