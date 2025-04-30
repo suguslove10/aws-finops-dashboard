@@ -22,7 +22,7 @@ def welcome_banner() -> None:
                                                                          | $$                
                                                                          |__/                
 [/]
-[bold bright_blue]AWS FinOps Dashboard CLI (v2.2.3)[/]                                                                         
+[bold bright_blue]AWS FinOps Dashboard CLI (v2.2.4)[/]                                                                         
 """
     console.print(banner)
 
@@ -99,7 +99,7 @@ def parse_args() -> argparse.Namespace:
 
     return parser.parse_args()
 
-__version__ = "2.2.2"
+__version__ = "2.2.4"
 def check_latest_version() -> None:
     """Check for the latest version of the AWS FinOps Dashboard (CLI)."""
     try:

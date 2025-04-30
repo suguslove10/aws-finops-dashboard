@@ -1,4 +1,4 @@
-# AWS FinOps Dashboard (CLI) v2.2.3
+# AWS FinOps Dashboard (CLI) v2.2.4
 
 [![PyPI version](https://img.shields.io/pypi/v/aws-finops-dashboard.svg)](https://pypi.org/project/aws-finops-dashboard/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
