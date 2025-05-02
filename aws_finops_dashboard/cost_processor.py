@@ -1,10 +1,9 @@
 import csv
 import json
 import os
-from datetime import date, datetime, timedelta
-from typing import List, Optional, Tuple, Dict
-
 from collections import defaultdict
+from datetime import date, datetime, timedelta
+from typing import Dict, List, Optional, Tuple
 
 from boto3.session import Session
 from rich.console import Console
@@ -13,6 +12,7 @@ from aws_finops_dashboard.aws_client import get_account_id
 from aws_finops_dashboard.types import BudgetInfo, CostData, EC2Summary, ProfileData
 
 console = Console()
+
 
 def get_trend(session: Session, tag: Optional[list[str]] = None) -> Dict[str, any]:
     """
@@ -28,12 +28,7 @@ def get_trend(session: Session, tag: Optional[list[str]] = None) -> Dict[str, an
     if tag:
         for t in tag:
             key, value = t.split("=", 1)
-            tag_filters.append(
-                {
-                    "Key": key,
-                    "Values": [value]
-                }
-            )
+            tag_filters.append({"Key": key, "Values": [value]})
 
     filter_param = None
     if tag_filters:
@@ -48,8 +43,14 @@ def get_trend(session: Session, tag: Optional[list[str]] = None) -> Dict[str, an
 
         else:
             filter_param = {
-                "And":[
-                    {"Tags": {"Key": f["Key"], "Values": f["Values"], "MatchOptions": ["EQUALS"]}}
+                "And": [
+                    {
+                        "Tags": {
+                            "Key": f["Key"],
+                            "Values": f["Values"],
+                            "MatchOptions": ["EQUALS"],
+                        }
+                    }
                     for f in tag_filters
                 ]
             }
@@ -57,14 +58,12 @@ def get_trend(session: Session, tag: Optional[list[str]] = None) -> Dict[str, an
     if filter_param:
         kwargs["Filter"] = filter_param
 
-    
     end_date = date.today()
     start_date = (end_date - timedelta(days=180)).replace(day=1)
     account_id = get_account_id(session)
 
-
     monthly_costs = []
-    
+
     try:
         monthly_data = ce.get_cost_and_usage(
             TimePeriod={
@@ -76,7 +75,9 @@ def get_trend(session: Session, tag: Optional[list[str]] = None) -> Dict[str, an
             **kwargs,
         )
         for period in monthly_data.get("ResultsByTime", []):
-            month = datetime.strptime(period["TimePeriod"]["Start"], "%Y-%m-%d").strftime("%b %Y")
+            month = datetime.strptime(
+                period["TimePeriod"]["Start"], "%Y-%m-%d"
+            ).strftime("%b %Y")
             cost = float(period["Total"]["UnblendedCost"]["Amount"])
             monthly_costs.append((month, cost))
     except Exception as e:
@@ -89,7 +90,12 @@ def get_trend(session: Session, tag: Optional[list[str]] = None) -> Dict[str, an
     }
 
 
-def get_cost_data(session: Session, time_range: Optional[int] = None, tag: Optional[list[str]] = None, get_trend: bool = False) -> CostData:
+def get_cost_data(
+    session: Session,
+    time_range: Optional[int] = None,
+    tag: Optional[list[str]] = None,
+    get_trend: bool = False,
+) -> CostData:
     """
     Get cost data for an AWS account.
 
@@ -108,12 +114,7 @@ def get_cost_data(session: Session, time_range: Optional[int] = None, tag: Optio
     if tag:
         for t in tag:
             key, value = t.split("=", 1)
-            tag_filters.append(
-                {
-                    "Key": key,
-                    "Values": [value]
-                }
-            )
+            tag_filters.append({"Key": key, "Values": [value]})
 
     filter_param = None
     if tag_filters:
@@ -128,8 +129,14 @@ def get_cost_data(session: Session, time_range: Optional[int] = None, tag: Optio
 
         else:
             filter_param = {
-                "And":[
-                    {"Tags": {"Key": f["Key"], "Values": f["Values"], "MatchOptions": ["EQUALS"]}}
+                "And": [
+                    {
+                        "Tags": {
+                            "Key": f["Key"],
+                            "Values": f["Values"],
+                            "MatchOptions": ["EQUALS"],
+                        }
+                    }
                     for f in tag_filters
                 ]
             }
@@ -203,17 +210,10 @@ def get_cost_data(session: Session, time_range: Optional[int] = None, tag: Optio
 
     # Reformat into groups by service
     aggregated_groups = [
-        {
-            "Keys": [service],
-            "Metrics": {
-                "UnblendedCost": {
-                    "Amount": str(amount)
-                }
-            }
-        }
+        {"Keys": [service], "Metrics": {"UnblendedCost": {"Amount": str(amount)}}}
         for service, amount in aggregated_service_costs.items()
     ]
-    
+
     budgets_data: List[BudgetInfo] = []
     try:
         response = budgets.describe_budgets(AccountId=account_id)
@@ -247,7 +247,9 @@ def get_cost_data(session: Session, time_range: Optional[int] = None, tag: Optio
     current_period_name = (
         f"Current {time_range} days cost" if time_range else "Current month's cost"
     )
-    previous_period_name = f"Previous {time_range} days cost" if time_range else "Last month's cost"
+    previous_period_name = (
+        f"Previous {time_range} days cost" if time_range else "Last month's cost"
+    )
 
     return {
         "account_id": account_id,
@@ -297,9 +299,7 @@ def format_budget_info(budgets: List[BudgetInfo]) -> List[str]:
         budget_info.append(f"{budget['name']} limit: ${budget['limit']}")
         budget_info.append(f"{budget['name']} actual: ${budget['actual']:.2f}")
         if budget["forecast"] is not None:
-            budget_info.append(
-                f"{budget['name']} forecast: ${budget['forecast']:.2f}"
-            )
+            budget_info.append(f"{budget['name']} forecast: ${budget['forecast']:.2f}")
 
     if not budget_info:
         budget_info.append("No budgets found;\nCreate a budget for this account")
@@ -324,7 +324,10 @@ def format_ec2_summary(ec2_data: EC2Summary) -> List[str]:
 
     return ec2_summary_text
 
-def change_in_total_cost(current_period: float, previous_period: float) -> Optional[float]:
+
+def change_in_total_cost(
+    current_period: float, previous_period: float
+) -> Optional[float]:
     """Calculate the  change in total cost between current period and previous period."""
     if abs(previous_period) < 0.01:
         if abs(current_period) < 0.01:
@@ -334,9 +337,10 @@ def change_in_total_cost(current_period: float, previous_period: float) -> Optio
     # Calculate percentage change
     return ((current_period - previous_period) / previous_period) * 100.00
 
+
 def export_to_csv(
-    data: List[ProfileData], 
-    filename: str, 
+    data: List[ProfileData],
+    filename: str,
     output_dir: Optional[str] = None,
     previous_period_dates: str = "N/A",
     current_period_dates: str = "N/A",
@@ -353,7 +357,7 @@ def export_to_csv(
             output_filename = base_filename
 
         previous_period_header = f"Cost for period\n({previous_period_dates})"
-        current_period_header = f"Cost for period\n({current_period_dates})" 
+        current_period_header = f"Cost for period\n({current_period_dates})"
 
         with open(output_filename, "w", newline="") as csvfile:
             fieldnames = [

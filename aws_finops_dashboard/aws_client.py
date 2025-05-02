@@ -1,5 +1,5 @@
 from collections import defaultdict
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import boto3
 from boto3.session import Session
@@ -118,3 +118,72 @@ def ec2_summary(
         instance_summary["stopped"] = 0
 
     return instance_summary
+
+
+def get_stopped_instances(
+    session: Session, regions: List[RegionName]
+) -> Dict[RegionName, List[str]]:
+    """Get stopped EC2 instances per region."""
+    stopped = {}
+    for region in regions:
+        try:
+            ec2 = session.client("ec2", region_name=region)
+            response = ec2.describe_instances(
+                Filters=[{"Name": "instance-state-name", "Values": ["stopped"]}]
+            )
+            ids = [
+                inst["InstanceId"]
+                for res in response["Reservations"]
+                for inst in res["Instances"]
+            ]
+            if ids:
+                stopped[region] = ids
+        except Exception as e:
+            console.log(
+                f"[yellow]Warning: Could not fetch stopped instances in {region}: {str(e)}[/]"
+            )
+    return stopped
+
+
+def get_unused_volumes(
+    session: Session, regions: List[RegionName]
+) -> Dict[RegionName, List[str]]:
+    """Get unattached EBS volumes per region."""
+    unused = {}
+    for region in regions:
+        try:
+            ec2 = session.client("ec2", region_name=region)
+            response = ec2.describe_volumes(
+                Filters=[{"Name": "status", "Values": ["available"]}]
+            )
+            vols = [vol["VolumeId"] for vol in response["Volumes"]]
+            if vols:
+                unused[region] = vols
+        except Exception as e:
+            console.log(
+                f"[yellow]Warning: Could not fetch unused volumes in {region}: {str(e)}[/]"
+            )
+    return unused
+
+
+def get_unused_eips(
+    session: Session, regions: List[RegionName]
+) -> Dict[RegionName, List[str]]:
+    """Get unused Elastic IPs per region."""
+    eips = {}
+    for region in regions:
+        try:
+            ec2 = session.client("ec2", region_name=region)
+            response = ec2.describe_addresses()
+            free = [
+                addr["PublicIp"]
+                for addr in response["Addresses"]
+                if not addr.get("AssociationId")
+            ]
+            if free:
+                eips[region] = free
+        except Exception as e:
+            console.log(
+                f"[yellow]Warning: Could not fetch EIPs in {region}: {str(e)}[/]"
+            )
+    return eips
