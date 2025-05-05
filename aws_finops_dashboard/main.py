@@ -18,7 +18,8 @@ from aws_finops_dashboard.aws_client import (
     get_stopped_instances,
     get_unused_eips,
     get_unused_volumes,
-    get_untagged_resources
+    get_untagged_resources,
+    get_budgets
 )
 from aws_finops_dashboard.cost_processor import (
     change_in_total_cost,
@@ -356,9 +357,9 @@ def run_dashboard(args: argparse.Namespace) -> int:
             ] or ["None"]
 
             # Budget exceed alerts
-            cost_data = get_cost_data(session, args.time_range, args.tag)
+            budget_data = get_budgets(session)
             alerts = []
-            for b in cost_data["budgets"]:
+            for b in budget_data:
                 if b["actual"] > b["limit"]:
                     alerts.append(
                         f"[red1]{b['name']}[/]: ${b['actual']:.2f} > ${b['limit']:.2f}"

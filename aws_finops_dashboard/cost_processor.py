@@ -154,6 +154,10 @@ def get_cost_data(
         start_date = today.replace(day=1)
         end_date = today
 
+        #Edge case when user runs the tool on the first day of the month
+        if start_date == end_date:
+            end_date += timedelta(days=1)
+
         # Last calendar month
         previous_period_end = start_date - timedelta(days=1)
         previous_period_start = previous_period_end.replace(day=1)

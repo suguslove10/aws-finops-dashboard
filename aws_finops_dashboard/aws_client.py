@@ -6,7 +6,7 @@ from botocore.exceptions import ClientError
 from boto3.session import Session
 from rich.console import Console
 
-from aws_finops_dashboard.types import EC2Summary, RegionName
+from aws_finops_dashboard.types import EC2Summary, RegionName, BudgetInfo
 
 console = Console()
 
@@ -252,3 +252,30 @@ def get_untagged_resources(session: Session, regions: List[str]) -> Dict[str, Di
             console.log(f"[yellow]Warning: Could not fetch ELBv2 load balancers in {region}: {str(e)}[/]")
 
     return result
+
+def get_budgets(session: Session) -> List[BudgetInfo]:
+        account_id = get_account_id(session)
+        budgets = session.client("budgets", region_name="us-east-1")
+
+        budgets_data: List[BudgetInfo] = []
+        try:
+            response = budgets.describe_budgets(AccountId=account_id)
+            for budget in response["Budgets"]:
+                budgets_data.append(
+                    {
+                        "name": budget["BudgetName"],
+                        "limit": float(budget["BudgetLimit"]["Amount"]),
+                        "actual": float(budget["CalculatedSpend"]["ActualSpend"]["Amount"]),
+                        "forecast": float(
+                            budget["CalculatedSpend"]
+                            .get("ForecastedSpend", {})
+                            .get("Amount", 0.0)
+                        )
+                        or None,
+                    }
+                )
+        except Exception as e:
+            pass
+
+        return budgets_data
+
