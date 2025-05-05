@@ -1,25 +1,23 @@
+from decimal import ROUND_HALF_UP, Decimal, getcontext
 from typing import List, Tuple
-from decimal import Decimal, ROUND_HALF_UP, getcontext
-from rich.table import Table
-from rich.panel import Panel
+
 from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
 
 # Set precision context for Decimal operations
 getcontext().prec = 6
 
 console = Console()
 
+
 def create_trend_bars(monthly_costs: List[Tuple[str, float]]) -> None:
     """Create colorful trend bars using Rich's styling and precise Decimal math."""
     if not monthly_costs:
         return
 
-    table = Table(
-        box=None,
-        padding=(1, 1),
-        collapse_padding=True
-    )
-    
+    table = Table(box=None, padding=(1, 1), collapse_padding=True)
+
     table.add_column("Month", style="bright_magenta", width=10)
     table.add_column("Cost", style="bright_cyan", justify="right", width=15)
     table.add_column("", width=50)
@@ -52,7 +50,9 @@ def create_trend_bars(monthly_costs: List[Tuple[str, float]]) -> None:
                     change = "[bright_red]N/A[/]"
                     bar_color = "bright_red"
             else:
-                change_pct = ((cost_d - prev_d) / prev_d * Decimal("100")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                change_pct = ((cost_d - prev_d) / prev_d * Decimal("100")).quantize(
+                    Decimal("0.01"), rounding=ROUND_HALF_UP
+                )
 
                 if abs(change_pct) < Decimal("0.01"):
                     change = "[bright_yellow]0%[/]"
@@ -67,17 +67,14 @@ def create_trend_bars(monthly_costs: List[Tuple[str, float]]) -> None:
                     change = f"[{color}]{sign}{change_pct}%[/]"
                     bar_color = color
 
-        table.add_row(
-            month,
-            f"${cost:,.2f}",
-            f"[{bar_color}]{bar}[/]",
-            change
-        )
+        table.add_row(month, f"${cost:,.2f}", f"[{bar_color}]{bar}[/]", change)
         prev_cost = cost
 
-    console.print(Panel(
-        table,
-        title="[cyan]AWS Cost Trend Analysis[/]",
-        border_style="bright_blue",
-        padding=(1, 1)
-    ))
+    console.print(
+        Panel(
+            table,
+            title="[cyan]AWS Cost Trend Analysis[/]",
+            border_style="bright_blue",
+            padding=(1, 1),
+        )
+    )

@@ -1,11 +1,12 @@
 import argparse
 import sys
-from rich.console import Console
+
 import requests
 from packaging import version
-import sys
+from rich.console import Console
 
 console = Console()
+
 
 def welcome_banner() -> None:
     banner = r"""
@@ -97,13 +98,24 @@ def parse_args() -> argparse.Namespace:
         help="Display a trend report as bars for the past 6 months time range",
     )
 
+    parser.add_argument(
+        "--audit",
+        action="store_true",
+        help="Display an audit report with cost anomalies, stopped EC2 instances, unused EBS columes, budget alerts, and more",
+    )
+
     return parser.parse_args()
 
+
 __version__ = "2.2.4"
+
+
 def check_latest_version() -> None:
     """Check for the latest version of the AWS FinOps Dashboard (CLI)."""
     try:
-        response = requests.get("https://pypi.org/pypi/aws-finops-dashboard/json", timeout=3)
+        response = requests.get(
+            "https://pypi.org/pypi/aws-finops-dashboard/json", timeout=3
+        )
         latest = response.json()["info"]["version"]
         if version.parse(latest) > version.parse(__version__):
             console.print(
@@ -121,7 +133,7 @@ def main() -> int:
     welcome_banner()
     check_latest_version()
     from aws_finops_dashboard.main import run_dashboard
-        
+
     args = parse_args()
     result = run_dashboard(args)
     return 0 if result == 0 else 1

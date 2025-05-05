@@ -1,7 +1,8 @@
 from collections import defaultdict
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import boto3
+from botocore.exceptions import ClientError
 from boto3.session import Session
 from rich.console import Console
 
@@ -118,3 +119,136 @@ def ec2_summary(
         instance_summary["stopped"] = 0
 
     return instance_summary
+
+
+def get_stopped_instances(
+    session: Session, regions: List[RegionName]
+) -> Dict[RegionName, List[str]]:
+    """Get stopped EC2 instances per region."""
+    stopped = {}
+    for region in regions:
+        try:
+            ec2 = session.client("ec2", region_name=region)
+            response = ec2.describe_instances(
+                Filters=[{"Name": "instance-state-name", "Values": ["stopped"]}]
+            )
+            ids = [
+                inst["InstanceId"]
+                for res in response["Reservations"]
+                for inst in res["Instances"]
+            ]
+            if ids:
+                stopped[region] = ids
+        except Exception as e:
+            console.log(
+                f"[yellow]Warning: Could not fetch stopped instances in {region}: {str(e)}[/]"
+            )
+    return stopped
+
+
+def get_unused_volumes(
+    session: Session, regions: List[RegionName]
+) -> Dict[RegionName, List[str]]:
+    """Get unattached EBS volumes per region."""
+    unused = {}
+    for region in regions:
+        try:
+            ec2 = session.client("ec2", region_name=region)
+            response = ec2.describe_volumes(
+                Filters=[{"Name": "status", "Values": ["available"]}]
+            )
+            vols = [vol["VolumeId"] for vol in response["Volumes"]]
+            if vols:
+                unused[region] = vols
+        except Exception as e:
+            console.log(
+                f"[yellow]Warning: Could not fetch unused volumes in {region}: {str(e)}[/]"
+            )
+    return unused
+
+
+def get_unused_eips(
+    session: Session, regions: List[RegionName]
+) -> Dict[RegionName, List[str]]:
+    """Get unused Elastic IPs per region."""
+    eips = {}
+    for region in regions:
+        try:
+            ec2 = session.client("ec2", region_name=region)
+            response = ec2.describe_addresses()
+            free = [
+                addr["PublicIp"]
+                for addr in response["Addresses"]
+                if not addr.get("AssociationId")
+            ]
+            if free:
+                eips[region] = free
+        except Exception as e:
+            console.log(
+                f"[yellow]Warning: Could not fetch EIPs in {region}: {str(e)}[/]"
+            )
+    return eips
+
+def get_untagged_resources(session: Session, regions: List[str]) -> Dict[str, Dict[str, List[str]]]:
+    result: Dict[str, Dict[str, List[str]]] = {
+        "EC2": {},
+        "RDS": {},
+        "Lambda": {},
+        "ELBv2": {},
+    }
+
+    for region in regions:
+        # EC2
+        try:
+            ec2 = session.client("ec2", region_name=region)
+            response = ec2.describe_instances()
+            for reservation in response["Reservations"]:
+                for instance in reservation["Instances"]:
+                    if not instance.get("Tags"):
+                        result["EC2"].setdefault(region, []).append(instance["InstanceId"])
+        except Exception as e:
+            console.log(f"[yellow]Warning: Could not fetch EC2 instances in {region}: {str(e)}[/]")
+
+        # RDS
+        try:
+            rds = session.client("rds", region_name=region)
+            response = rds.describe_db_instances()
+            for db_instance in response["DBInstances"]:
+                arn = db_instance["DBInstanceArn"]
+                tags = rds.list_tags_for_resource(ResourceName=arn).get("TagList", [])
+                if not tags:
+                    result["RDS"].setdefault(region, []).append(db_instance["DBInstanceIdentifier"])
+        except Exception as e:
+            console.log(f"[yellow]Warning: Could not fetch RDS instances in {region}: {str(e)}[/]")
+
+        # Lambda
+        try:
+            lambda_client = session.client("lambda", region_name=region)
+            response = lambda_client.list_functions()
+            for function in response["Functions"]:
+                arn = function["FunctionArn"]
+                tags = lambda_client.list_tags(Resource=arn).get("Tags", {})
+                if not tags:
+                    result["Lambda"].setdefault(region, []).append(function["FunctionName"])
+        except Exception as e:
+            console.log(f"[yellow]Warning: Could not fetch Lambda functions in {region}: {str(e)}[/]")
+
+        # ELBv2
+        try:
+            elbv2 = session.client("elbv2", region_name=region)
+            lbs = elbv2.describe_load_balancers().get("LoadBalancers", [])
+
+            if lbs:
+                arn_to_name = {lb["LoadBalancerArn"]: lb["LoadBalancerName"] for lb in lbs}
+                arns = list(arn_to_name.keys())
+
+                tags_response = elbv2.describe_tags(ResourceArns=arns)
+                for desc in tags_response["TagDescriptions"]:
+                    arn = desc["ResourceArn"]
+                    if not desc.get("Tags"):
+                        lb_name = arn_to_name.get(arn, arn)
+                        result["ELBv2"].setdefault(region, []).append(lb_name)
+        except Exception as e:
+            console.log(f"[yellow]Warning: Could not fetch ELBv2 load balancers in {region}: {str(e)}[/]")
+
+    return result

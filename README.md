@@ -20,6 +20,7 @@ It provides an overview of AWS spend by profile, service-level breakdowns, budge
 - **AWS Budgets Information**: Displays budget limits and actual spend
 - **EC2 Instance Status**: Detailed state information across specified/accessible regions
 - **Cost Trend Analysis**: View detailed cost trends in bar charts for the last 6 months across AWS profiles
+- **FinOps Audit**: View untagged resources, unused or stopped resources and Budget breaches across AWS profiles
 - **Profile Management**:
   - Automatic profile detection
   - Specific profile selection with `--profiles`
@@ -129,6 +130,7 @@ aws-finops [options]
 | `--dir`, `-d` | Directory to save the report file(s) (default: current directory). |
 | `--time-range`, `-t` | Time range for cost data in days (default: current month). Examples: 7, 30, 90. |
 | `--trend` | View cost trend analysis for the last 6 months. |
+| `--audit` | View list of untagged, unused resoruces and budget breaches. |
 
 ### Examples
 
@@ -174,6 +176,9 @@ aws-finops --profiles dev prod -r us-east-1 --trend
 
 # View cost trend analysis for all cli profiles for a specific cost tag 'Team=DevOps'
 aws-finops --all --trend --tag Team=DevOps
+
+# View audit report for profile 'dev' in region 'us-east-1'
+aws-finops -p dev -r us-east-1 --audit
 ```
 
 You'll see a live-updating table of your AWS account cost and usage details in the terminal. If export options are specified, a report file will also be generated upon completion.
@@ -185,6 +190,8 @@ You'll see a live-updating table of your AWS account cost and usage details in t
 ![Dashboard](aws-finops-dashboard-v2.2.3.png)
 
 ![Trend](aws-finops-dashboard_trend.png)
+
+![alt text](audit_report.png)
 
 ---
 

@@ -6,30 +6,35 @@ from typing import Dict, List, Optional
 import boto3
 from rich import box
 from rich.console import Console
-from rich.table import Column, Table
 from rich.progress import track
 from rich.status import Status
+from rich.table import Column, Table
 
 from aws_finops_dashboard.aws_client import (
     ec2_summary,
     get_accessible_regions,
     get_account_id,
     get_aws_profiles,
+    get_stopped_instances,
+    get_unused_eips,
+    get_unused_volumes,
+    get_untagged_resources
 )
 from aws_finops_dashboard.cost_processor import (
+    change_in_total_cost,
     export_to_csv,
     export_to_json,
     format_budget_info,
     format_ec2_summary,
     get_cost_data,
-    process_service_costs,
-    change_in_total_cost,
     get_trend,
+    process_service_costs,
 )
 from aws_finops_dashboard.types import BudgetInfo, ProfileData
 from aws_finops_dashboard.visualisations import create_trend_bars
 
 console = Console()
+
 
 def process_single_profile(
     profile: str,
@@ -191,8 +196,16 @@ def create_display_table(
     """Create and configure the display table with dynamic column names."""
     return Table(
         Column("AWS Account Profile", justify="center", vertical="middle"),
-        Column(f"{previous_period_name}\n({previous_period_dates})", justify="center", vertical="middle"),
-        Column(f"{current_period_name}\n({current_period_dates})", justify="center", vertical="middle"),
+        Column(
+            f"{previous_period_name}\n({previous_period_dates})",
+            justify="center",
+            vertical="middle",
+        ),
+        Column(
+            f"{current_period_name}\n({current_period_dates})",
+            justify="center",
+            vertical="middle",
+        ),
         Column("Cost By Service", vertical="middle"),
         Column("Budget Status", vertical="middle"),
         Column("EC2 Instance Summary", justify="center", vertical="middle"),
@@ -218,8 +231,10 @@ def add_profile_to_table(table: Table, profile_data: ProfileData) -> None:
             elif percentage_change == 0:
                 change_text = "\n\n[bright_yellow]➡ 0.00%[/]"
 
-        current_month_with_change = f"[bold red]${profile_data['current_month']:.2f}[/]{change_text}"
-            
+        current_month_with_change = (
+            f"[bold red]${profile_data['current_month']:.2f}[/]{change_text}"
+        )
+
         table.add_row(
             f"[bright_magenta]Profile: {profile_data['profile']}\nAccount: {profile_data['account_id']}[/]",
             f"[bold red]${profile_data['last_month']:.2f}[/]",
@@ -283,6 +298,88 @@ def run_dashboard(args: argparse.Namespace) -> int:
         user_regions = args.regions
         time_range = args.time_range
 
+    if args.audit:
+        console.print("[bold bright_cyan]Preparing your audit report...[/]")
+        table = Table(
+            Column("Profile", justify="center"),
+            Column("Account ID", justify="center"),
+            Column("Untagged Resources"),
+            Column("Stopped EC2 Instances"),
+            Column("Unused Volumes"),
+            Column("Unused EIPs"),
+            Column("Budget Alerts"),
+            title="AWS FinOps Audit Report",
+            show_lines=True,
+            box=box.ASCII_DOUBLE_HEAD,
+            style="bright_cyan",
+        )
+        for profile in profiles_to_use:
+            session = boto3.Session(profile_name=profile)
+            account_id = get_account_id(session) or "Unknown"
+            regions = args.regions or get_accessible_regions(session)
+
+            # Untagged resources
+            try:
+                untagged = get_untagged_resources(session, regions)
+                anomalies = []
+                for service, region_map in untagged.items():
+                    if region_map:  # Only process if the service has untagged resources
+                        service_block = f"[bright_yellow]{service}[/]:\n"
+                        for region, ids in region_map.items():
+                            if ids:
+                                ids_block = "\n".join(f"[orange1]{res_id}[/]" for res_id in ids)
+                                service_block += f"\n{region}:\n{ids_block}\n"
+                        anomalies.append(service_block)
+                if not any(region_map for region_map in untagged.values()):
+                    anomalies = ["None"]
+            except Exception as e:
+                anomalies = [f"Error: {str(e)}"]
+
+
+
+            # Stopped EC2
+            stopped = get_stopped_instances(session, regions)
+            stopped_list = [f"{r}:\n[gold1]{'\n'.join(ids)}[/]" for r, ids in stopped.items()] or [
+                "None"
+            ]
+
+            # Unused EBS volumes
+            unused_vols = get_unused_volumes(session, regions)
+            vols_list = [
+                f"{r}:\n[dark_orange]{'\n'.join(ids)}[/]" for r, ids in unused_vols.items()
+            ] or ["None"]
+
+            # Unused EIPs
+            unused_eips = get_unused_eips(session, regions)
+            eips_list = [
+                f"{r}:\n{',\n'.join(ids)}" for r, ids in unused_eips.items()
+            ] or ["None"]
+
+            # Budget exceed alerts
+            cost_data = get_cost_data(session, args.time_range, args.tag)
+            alerts = []
+            for b in cost_data["budgets"]:
+                if b["actual"] > b["limit"]:
+                    alerts.append(
+                        f"[red1]{b['name']}[/]: ${b['actual']:.2f} > ${b['limit']:.2f}"
+                    )
+            if not alerts:
+                alerts = ["No budgets exceeded"]
+
+            table.add_row(
+                f"[dark_magenta]{profile}[/]",
+                account_id,
+                "\n".join(anomalies),
+                "\n".join(stopped_list),
+                "\n".join(vols_list),
+                "\n".join(eips_list),
+                "\n".join(alerts),
+            )
+        console.print(table)
+        console.print(
+            "[bold bright_cyan]Note: The dashboard only lists untagged EC2, RDS, Lambda, ELBv2.\n[/]"
+        )
+        return 0
 
     if args.trend:
         console.print("[bold bright_cyan]Analysing cost trends...[/]")
@@ -296,8 +393,10 @@ def run_dashboard(args: argparse.Namespace) -> int:
                     if account_id:
                         account_profiles[account_id].append(profile)
                 except Exception as e:
-                    console.print(f"[red]Error checking account ID for profile {profile}: {str(e)}[/]")
-            
+                    console.print(
+                        f"[red]Error checking account ID for profile {profile}: {str(e)}[/]"
+                    )
+
             # Show trends by account using primary profile for each account
             for account_id, profiles in account_profiles.items():
                 try:
@@ -305,17 +404,23 @@ def run_dashboard(args: argparse.Namespace) -> int:
                     session = boto3.Session(profile_name=primary_profile)
                     cost_data = get_trend(session, args.tag)
                     trend_data = cost_data.get("monthly_costs")
-                    
+
                     if not trend_data:
-                        console.print(f"[yellow]No trend data available for account {account_id}[/]")
+                        console.print(
+                            f"[yellow]No trend data available for account {account_id}[/]"
+                        )
                         continue
-                    
+
                     profile_list = ", ".join(profiles)
-                    console.print(f"\n[bright_yellow]Account: {account_id} (Profiles: {profile_list})[/]")
+                    console.print(
+                        f"\n[bright_yellow]Account: {account_id} (Profiles: {profile_list})[/]"
+                    )
                     create_trend_bars(trend_data)
-                    
+
                 except Exception as e:
-                    console.print(f"[red]Error getting trend for account {account_id}: {str(e)}[/]")
+                    console.print(
+                        f"[red]Error getting trend for account {account_id}: {str(e)}[/]"
+                    )
         else:
             # Original logic for individual profiles
             for profile in profiles_to_use:
@@ -324,19 +429,27 @@ def run_dashboard(args: argparse.Namespace) -> int:
                     cost_data = get_trend(session, args.tag)
                     trend_data = cost_data.get("monthly_costs")
                     account_id = cost_data.get("account_id", "Unknown")
-                    
+
                     if not trend_data:
-                        console.print(f"[yellow]No trend data available for profile {profile}[/]")
+                        console.print(
+                            f"[yellow]No trend data available for profile {profile}[/]"
+                        )
                         continue
-                        
-                    console.print(f"\n[bright_yellow]Account: {account_id} (Profile: {profile})[/]")
+
+                    console.print(
+                        f"\n[bright_yellow]Account: {account_id} (Profile: {profile})[/]"
+                    )
                     create_trend_bars(trend_data)
-                    
+
                 except Exception as e:
-                    console.print(f"[red]Error getting trend for profile {profile}: {str(e)}[/]")
+                    console.print(
+                        f"[red]Error getting trend for profile {profile}: {str(e)}[/]"
+                    )
         return 0
-    
-    with Status("[bright_cyan]Initialising dashboard...", spinner="aesthetic", speed=0.4):
+
+    with Status(
+        "[bright_cyan]Initialising dashboard...", spinner="aesthetic", speed=0.4
+    ):
         if profiles_to_use:
             try:
                 sample_session = boto3.Session(profile_name=profiles_to_use[0])
@@ -360,7 +473,12 @@ def run_dashboard(args: argparse.Namespace) -> int:
             previous_period_dates = "N/A"
             current_period_dates = "N/A"
 
-        table = create_display_table(previous_period_dates, current_period_dates, previous_period_name, current_period_name)
+        table = create_display_table(
+            previous_period_dates,
+            current_period_dates,
+            previous_period_name,
+            current_period_name,
+        )
 
     if args.combine:
         account_profiles = defaultdict(list)
@@ -382,7 +500,9 @@ def run_dashboard(args: argparse.Namespace) -> int:
                     f"[bold red]Error checking account ID for profile {profile}: {str(e)}[/]"
                 )
 
-        for account_id, profiles in track(account_profiles.items(), description="[bright_cyan]Fetching cost data..."):
+        for account_id, profiles in track(
+            account_profiles.items(), description="[bright_cyan]Fetching cost data..."
+        ):
             if len(profiles) > 1:
                 profile_data = process_combined_profiles(
                     account_id, profiles, user_regions, time_range, args.tag
@@ -393,12 +513,15 @@ def run_dashboard(args: argparse.Namespace) -> int:
                 )
             export_data.append(profile_data)
             add_profile_to_table(table, profile_data)
-            
 
     else:
-        
-        for profile in track(profiles_to_use, description="[bright_cyan]Fetching cost data..."):
-            profile_data = process_single_profile(profile, user_regions, time_range, args.tag)
+
+        for profile in track(
+            profiles_to_use, description="[bright_cyan]Fetching cost data..."
+        ):
+            profile_data = process_single_profile(
+                profile, user_regions, time_range, args.tag
+            )
             export_data.append(profile_data)
             add_profile_to_table(table, profile_data)
 
@@ -408,11 +531,12 @@ def run_dashboard(args: argparse.Namespace) -> int:
         for report_type in args.report_type:
             if report_type == "csv":
                 csv_path = export_to_csv(
-                    export_data, 
-                    args.report_name, 
+                    export_data,
+                    args.report_name,
                     args.dir,
                     previous_period_dates=previous_period_dates,
-                    current_period_dates=current_period_dates,)
+                    current_period_dates=current_period_dates,
+                )
                 if csv_path:
                     console.print(
                         f"[bright_green]Successfully exported to CSV format: {csv_path}[/]"
