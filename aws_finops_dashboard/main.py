@@ -18,6 +18,7 @@ from aws_finops_dashboard.aws_client import (
     get_stopped_instances,
     get_unused_eips,
     get_unused_volumes,
+    get_untagged_resources
 )
 from aws_finops_dashboard.cost_processor import (
     change_in_total_cost,
@@ -298,52 +299,60 @@ def run_dashboard(args: argparse.Namespace) -> int:
         time_range = args.time_range
 
     if args.audit:
-        console.print("[bold bright_cyan]Running audit report...[/]")
+        console.print("[bold bright_cyan]Preparing your audit report...[/]")
         table = Table(
             Column("Profile", justify="center"),
             Column("Account ID", justify="center"),
-            Column("Cost Anomalies"),
+            Column("Untagged Resources"),
             Column("Stopped EC2 Instances"),
             Column("Unused Volumes"),
             Column("Unused EIPs"),
             Column("Budget Alerts"),
             title="AWS FinOps Audit Report",
-            box=box.ASCII,
-            style="bright_magenta",
+            show_lines=True,
+            box=box.ASCII_DOUBLE_HEAD,
+            style="bright_cyan",
         )
         for profile in profiles_to_use:
             session = boto3.Session(profile_name=profile)
             account_id = get_account_id(session) or "Unknown"
             regions = args.regions or get_accessible_regions(session)
 
-            # Cost anomalies (>50% MoM change)
-            trend = get_trend(session, args.tag)["monthly_costs"]
-            anomalies = []
-            for i in range(1, len(trend)):
-                prev, curr = trend[i - 1][1], trend[i][1]
-                if prev > 0:
-                    pct = (curr - prev) / prev * 100
-                    if abs(pct) > 50:
-                        anomalies.append(f"{trend[i][0]}: {pct:.1f}%")
-            if not anomalies:
-                anomalies = ["No anomalies detected"]
+            # Untagged resources
+            try:
+                untagged = get_untagged_resources(session, regions)
+                anomalies = []
+                for service, region_map in untagged.items():
+                    if region_map:  # Only process if the service has untagged resources
+                        service_block = f"[bright_yellow]{service}[/]:\n"
+                        for region, ids in region_map.items():
+                            if ids:
+                                ids_block = "\n".join(f"[orange1]{res_id}[/]" for res_id in ids)
+                                service_block += f"\n{region}:\n{ids_block}\n"
+                        anomalies.append(service_block)
+                if not any(region_map for region_map in untagged.values()):
+                    anomalies = ["None"]
+            except Exception as e:
+                anomalies = [f"Error: {str(e)}"]
+
+
 
             # Stopped EC2
             stopped = get_stopped_instances(session, regions)
-            stopped_list = [f"{r}: {', '.join(ids)}" for r, ids in stopped.items()] or [
+            stopped_list = [f"{r}:\n[gold1]{'\n'.join(ids)}[/]" for r, ids in stopped.items()] or [
                 "None"
             ]
 
             # Unused EBS volumes
             unused_vols = get_unused_volumes(session, regions)
             vols_list = [
-                f"{r}: {', '.join(ids)}" for r, ids in unused_vols.items()
+                f"{r}:\n[dark_orange]{'\n'.join(ids)}[/]" for r, ids in unused_vols.items()
             ] or ["None"]
 
             # Unused EIPs
             unused_eips = get_unused_eips(session, regions)
             eips_list = [
-                f"{r}: {', '.join(ids)}" for r, ids in unused_eips.items()
+                f"{r}:\n{',\n'.join(ids)}" for r, ids in unused_eips.items()
             ] or ["None"]
 
             # Budget exceed alerts
@@ -352,13 +361,13 @@ def run_dashboard(args: argparse.Namespace) -> int:
             for b in cost_data["budgets"]:
                 if b["actual"] > b["limit"]:
                     alerts.append(
-                        f"{b['name']}: ${b['actual']:.2f} > ${b['limit']:.2f}"
+                        f"[red1]{b['name']}[/]: ${b['actual']:.2f} > ${b['limit']:.2f}"
                     )
             if not alerts:
                 alerts = ["No budgets exceeded"]
 
             table.add_row(
-                profile,
+                f"[dark_magenta]{profile}[/]",
                 account_id,
                 "\n".join(anomalies),
                 "\n".join(stopped_list),
@@ -367,6 +376,9 @@ def run_dashboard(args: argparse.Namespace) -> int:
                 "\n".join(alerts),
             )
         console.print(table)
+        console.print(
+            "[bold bright_cyan]Note: The dashboard only lists untagged EC2, RDS, Lambda, ELBv2.\n[/]"
+        )
         return 0
 
     if args.trend:

@@ -101,7 +101,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--audit",
         action="store_true",
-        help="Display an audit report with cost anomalies and recommendations",
+        help="Display an audit report with cost anomalies, stopped EC2 instances, unused EBS columes, budget alerts, and more",
     )
 
     return parser.parse_args()
