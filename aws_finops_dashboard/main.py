@@ -36,6 +36,7 @@ from aws_finops_dashboard.visualisations import create_trend_bars
 from aws_finops_dashboard.helpers import (
     export_audit_report_to_pdf,
     clean_rich_tags,
+    export_cost_dashboard_to_pdf
 )
 
 console = Console()
@@ -399,16 +400,17 @@ def run_dashboard(args: argparse.Namespace) -> int:
             "[bold bright_cyan]Note: The dashboard only lists untagged EC2, RDS, Lambda, ELBv2.\n[/]"
         )
 
-        if args.pdf and args.report_name:
-            pdf_path = export_audit_report_to_pdf(
+        if args.report_type and args.report_name:
+            if "pdf" in args.report_type:
+                pdf_path = export_audit_report_to_pdf(
                 audit_data,
                 file_name=args.report_name,
                 path=args.dir,
             )
-            if pdf_path:
-                console.print(
-                    f"[bright_green]Successfully exported audit report to PDF: {pdf_path}[/]"
-                )
+                if pdf_path:
+                    console.print(
+                        f"[bright_green]Successfully exported audit report to PDF: {pdf_path}[/]"
+                    )
 
 
         return 0
@@ -578,6 +580,18 @@ def run_dashboard(args: argparse.Namespace) -> int:
                 if json_path:
                     console.print(
                         f"[bright_green]Successfully exported to JSON format: {json_path}[/]"
+                    )
+            elif report_type == "pdf":
+                pdf_path = export_cost_dashboard_to_pdf(
+                    export_data,
+                    args.report_name,
+                    args.dir,
+                    previous_period_dates=previous_period_dates,
+                    current_period_dates=current_period_dates,
+                )
+                if pdf_path:
+                    console.print(
+                        f"[bright_green]Successfully exported to PDF format: {pdf_path}[/]"
                     )
 
     return 0

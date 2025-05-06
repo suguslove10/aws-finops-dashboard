@@ -1,4 +1,4 @@
-# AWS FinOps Dashboard (CLI) v2.2.4
+# AWS FinOps Dashboard (CLI) v2.2.5
 
 [![PyPI version](https://img.shields.io/pypi/v/aws-finops-dashboard.svg)](https://pypi.org/project/aws-finops-dashboard/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -6,7 +6,6 @@
 [![Downloads](https://static.pepy.tech/badge/aws-finops-dashboard)](https://pepy.tech/project/aws-finops-dashboard)
 
 The AWS FinOps Dashboard is an open-source, Python-based command-line tool (built with the Rich library) for AWS cost monitoring. It provides multi-account cost summaries by time period, service, and cost allocation tags; budget limits vs. actuals; EC2 instance status; six‑month cost trend charts; and “FinOps audit” reports (e.g. untagged or idle resources). It can export data to CSV/JSON/PDF.
-
 
 ---
 
@@ -32,7 +31,7 @@ The AWS FinOps Dashboard is an open-source, Python-based command-line tool (buil
   - JSON export with `--report-name` and `--report-type json`
   - Export to both CSV and JSON formats with `--report-name` and `--report-type csv json`
   - Specify output directory using `--dir`
-  - PDF export with `--pdf` and `--report-name` (only available for audit report for now)
+  - PDF export with `--report-name` and `--report-type pdf`
 - **Improved Error Handling**: Resilient and user-friendly error messages
 - **Beautiful Terminal UI**: Styled with the Rich library for a visually appealing experience
 
@@ -135,12 +134,11 @@ aws-finops [options]
 | `--combine`, `-c` | Combine profiles from the same AWS account into single rows. |
 | `--tag`, `-g` | Filter cost data by one or more cost allocation tags in `Key=Value` format. Example: `--tag Team=DevOps Env=Prod` |
 | `--report-name`, `-n` | Specify the base name for the report file (without extension). |
-| `--report-type`, `-y` | Specify one or more report types (space-separated): 'csv' and/or 'json'. |
+| `--report-type`, `-y` | Specify one or more report types (space-separated): 'csv' and/or 'json' and/or 'pdf' |
 | `--dir`, `-d` | Directory to save the report file(s) (default: current directory). |
 | `--time-range`, `-t` | Time range for cost data in days (default: current month). Examples: 7, 30, 90. |
 | `--trend` | View cost trend analysis for the last 6 months. |
 | `--audit` | View list of untagged, unused resoruces and budget breaches. |
-| `--pdf` | Export audit report to a PDF file; can only be used along with `--audit` flag. |
 
 ### Examples
 
@@ -191,7 +189,7 @@ aws-finops --all --trend --tag Team=DevOps
 aws-finops -p dev -r us-east-1 --audit
 
 # View audit report for profile 'dev' in region 'us-east-1' and export it as a pdf file to current working dir with file name 'Dev_Audit_Report'
-aws-finops -p dev -r us-east-1 --audit --pdf -n Dev_Audit_Report
+aws-finops -p dev -r us-east-1 --audit -n Dev_Audit_Report -y pdf
 ```
 
 You'll see a live-updating table of your AWS account cost and usage details in the terminal. If export options are specified, a report file will also be generated upon completion.
@@ -228,7 +226,7 @@ When exporting to CSV, a file is generated with the following columns:
 
 When exporting to JSON, a structured file is generated that includes all dashboard data in a format that's easy to parse programmatically.
 
-### PDF Output Format (Currently works only for Audit Report)
+### PDF Output Format (for Audit Report)
 
 When exporting to PDF, a file is generated with the following columns:
 

@@ -23,7 +23,7 @@ def welcome_banner() -> None:
                                                                          | $$                
                                                                          |__/                
 [/]
-[bold bright_blue]AWS FinOps Dashboard CLI (v2.2.4)[/]                                                                         
+[bold bright_blue]AWS FinOps Dashboard CLI (v2.2.5)[/]                                                                         
 """
     console.print(banner)
 
@@ -66,7 +66,7 @@ def parse_args() -> argparse.Namespace:
         "--report-type",
         "-y",
         nargs="+",
-        choices=["csv", "json"],
+        choices=["csv", "json", "pdf"],
         help="Specify one or more report types: csv and/or json (space-separated)",
         type=str,
         default=["csv"],
@@ -113,7 +113,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-__version__ = "2.2.4"
+__version__ = "2.2.5"
 
 
 def check_latest_version() -> None:
