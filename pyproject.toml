@@ -1,6 +1,6 @@
 [project]
 name = "aws-finops-dashboard"
-version = "2.2.4"
+version = "2.2.5"
 description = "A terminal-based AWS cost and resource dashboard."
 readme = "README.md"
 requires-python = ">=3.8"

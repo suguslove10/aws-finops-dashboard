@@ -369,7 +369,6 @@ def export_to_csv(
                 "AWS Account ID",
                 previous_period_header,
                 current_period_header,
-                "Current Month Cost",
                 "Cost By Service",
                 "Budget Status",
                 "EC2 Instances",
