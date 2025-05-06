@@ -12,6 +12,8 @@ dependencies = [
     "requests>=2.0.0",
     "packaging>=21.0",
     "reportlab>=3.6.1",
+    "pyyaml>=6.0.2",
+    "tomli>=2.2.1",
 ]
 keywords = ["aws", "finops", "dashboard", "cli", "cloud", "cost"]
 
@@ -34,6 +36,9 @@ dev = [
     "mypy>=1.5.1",
     "types-boto3",
     "types-requests",
+    "types-reportlab",
+    "types-PyYAML",
+    "types-toml",
 ]
 
 [tool.black]
@@ -61,6 +66,10 @@ dependencies = [
     "isort>=5.13.2",
     "mypy>=1.5.1",
     "types-boto3",
+    "types-requests",
+    "types-reportlab",
+    "types-PyYAML",
+    "types-toml",
 ]
 
 [tool.hatch.envs.default.scripts]

@@ -3,7 +3,7 @@ import json
 import os
 from collections import defaultdict
 from datetime import date, datetime, timedelta
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from boto3.session import Session
 from rich.console import Console
@@ -14,7 +14,7 @@ from aws_finops_dashboard.types import BudgetInfo, CostData, EC2Summary, Profile
 console = Console()
 
 
-def get_trend(session: Session, tag: Optional[list[str]] = None) -> Dict[str, any]:
+def get_trend(session: Session, tag: Optional[List[str]] = None) -> Dict[str, Any]:
     """
     Get cost trend data for an AWS account.
 
@@ -24,13 +24,13 @@ def get_trend(session: Session, tag: Optional[list[str]] = None) -> Dict[str, an
 
     """
     ce = session.client("ce")
-    tag_filters = []
+    tag_filters: List[Dict[str, Any]] = []
     if tag:
         for t in tag:
             key, value = t.split("=", 1)
             tag_filters.append({"Key": key, "Values": [value]})
 
-    filter_param = None
+    filter_param: Optional[Dict[str, Any]] = None
     if tag_filters:
         if len(tag_filters) == 1:
             filter_param = {
@@ -93,7 +93,7 @@ def get_trend(session: Session, tag: Optional[list[str]] = None) -> Dict[str, an
 def get_cost_data(
     session: Session,
     time_range: Optional[int] = None,
-    tag: Optional[list[str]] = None,
+    tag: Optional[List[str]] = None,
     get_trend: bool = False,
 ) -> CostData:
     """
@@ -110,13 +110,13 @@ def get_cost_data(
     budgets = session.client("budgets", region_name="us-east-1")
     today = date.today()
 
-    tag_filters = []
+    tag_filters: List[Dict[str, Any]] = []
     if tag:
         for t in tag:
             key, value = t.split("=", 1)
             tag_filters.append({"Key": key, "Values": [value]})
 
-    filter_param = None
+    filter_param: Optional[Dict[str, Any]] = None
     if tag_filters:
         if len(tag_filters) == 1:
             filter_param = {
@@ -154,7 +154,7 @@ def get_cost_data(
         start_date = today.replace(day=1)
         end_date = today
 
-        #Edge case when user runs the tool on the first day of the month
+        # Edge case when user runs the tool on the first day of the month
         if start_date == end_date:
             end_date += timedelta(days=1)
 
@@ -204,7 +204,7 @@ def get_cost_data(
         current_period_cost_by_service = {"ResultsByTime": [{"Groups": []}]}
 
     # Aggregate cost by service across all days
-    aggregated_service_costs = defaultdict(float)
+    aggregated_service_costs: Dict[str, float] = defaultdict(float)
 
     for result in current_period_cost_by_service.get("ResultsByTime", []):
         for group in result.get("Groups", []):
@@ -268,6 +268,7 @@ def get_cost_data(
         "current_period_end": end_date.isoformat(),
         "previous_period_start": previous_period_start.isoformat(),
         "previous_period_end": previous_period_end.isoformat(),
+        "monthly_costs": None,
     }
 
 

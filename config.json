@@ -1,0 +1,11 @@
+{
+  "profiles": ["default"],
+  "regions": ["us-east-1", "eu-west-2"],
+  "combine": true,
+  "report_name": "monthly_finops_summary",
+  "report_type": ["csv", "json","pdf"],
+  "dir": "./reports/aws-finops",
+  "time_range": 30,
+  "audit": false,
+  "trend": false
+}
