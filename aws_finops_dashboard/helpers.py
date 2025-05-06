@@ -77,7 +77,7 @@ def export_audit_report_to_pdf(
             ('FONTSIZE', (0, 0), (-1, -1), 8),
             ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('GRID', (0, 0), (-1, -1), 0.25, colors.black),
+            ('GRID', (0, 0), (-1, -1), 0.25, colors.grey),
             ('BACKGROUND', (0, 1), (-1, -1), colors.whitesmoke),
         ]))
 
