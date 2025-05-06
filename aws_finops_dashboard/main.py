@@ -33,6 +33,10 @@ from aws_finops_dashboard.cost_processor import (
 )
 from aws_finops_dashboard.types import BudgetInfo, ProfileData
 from aws_finops_dashboard.visualisations import create_trend_bars
+from aws_finops_dashboard.helpers import (
+    export_audit_report_to_pdf,
+    clean_rich_tags,
+)
 
 console = Console()
 
@@ -314,6 +318,9 @@ def run_dashboard(args: argparse.Namespace) -> int:
             box=box.ASCII_DOUBLE_HEAD,
             style="bright_cyan",
         )
+
+        audit_data = []
+
         for profile in profiles_to_use:
             session = boto3.Session(profile_name=profile)
             account_id = get_account_id(session) or "Unknown"
@@ -367,6 +374,17 @@ def run_dashboard(args: argparse.Namespace) -> int:
             if not alerts:
                 alerts = ["No budgets exceeded"]
 
+            # Add to audit data
+            audit_data.append({
+                "profile": profile,
+                "account_id": account_id,
+                "untagged_resources": clean_rich_tags("\n".join(anomalies)),
+                "stopped_instances": clean_rich_tags("\n".join(stopped_list)),
+                "unused_volumes": clean_rich_tags("\n".join(vols_list)),
+                "unused_eips": clean_rich_tags("\n".join(eips_list)),
+                "budget_alerts": clean_rich_tags("\n".join(alerts)),
+            })
+
             table.add_row(
                 f"[dark_magenta]{profile}[/]",
                 account_id,
@@ -380,6 +398,19 @@ def run_dashboard(args: argparse.Namespace) -> int:
         console.print(
             "[bold bright_cyan]Note: The dashboard only lists untagged EC2, RDS, Lambda, ELBv2.\n[/]"
         )
+
+        if args.pdf and args.report_name:
+            pdf_path = export_audit_report_to_pdf(
+                audit_data,
+                file_name=args.report_name,
+                path=args.dir,
+            )
+            if pdf_path:
+                console.print(
+                    f"[bright_green]Successfully exported audit report to PDF: {pdf_path}[/]"
+                )
+
+
         return 0
 
     if args.trend:

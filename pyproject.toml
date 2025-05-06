@@ -11,6 +11,7 @@ dependencies = [
     "rich>=14.0.0",
     "requests>=2.0.0",
     "packaging>=21.0",
+    "reportlab>=3.6.1",
 ]
 keywords = ["aws", "finops", "dashboard", "cli", "cloud", "cost"]
 
