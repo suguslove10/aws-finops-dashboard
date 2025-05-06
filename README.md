@@ -5,8 +5,8 @@
 [![GitHub stars](https://img.shields.io/github/stars/ravikiranvm/aws-finops-dashboard.svg)](https://github.com/ravikiranvm/aws-finops-dashboard/stargazers)
 [![Downloads](https://static.pepy.tech/badge/aws-finops-dashboard)](https://pepy.tech/project/aws-finops-dashboard)
 
-A terminal-based AWS cost and resource dashboard built with Python and the [Rich](https://github.com/Textualize/rich) library.
-It provides an overview of AWS spend by profile, service-level breakdowns, budget tracking, EC2 instance summaries, and allows exporting data to CSV or JSON.
+The AWS FinOps Dashboard is an open-source, Python-based command-line tool (built with the Rich library) for AWS cost monitoring. It provides multi-account cost summaries by time period, service, and cost allocation tags; budget limits vs. actuals; EC2 instance status; six‑month cost trend charts; and “FinOps audit” reports (e.g. untagged or idle resources). It can export data to CSV/JSON/PDF.
+
 
 ---
 
@@ -32,6 +32,7 @@ It provides an overview of AWS spend by profile, service-level breakdowns, budge
   - JSON export with `--report-name` and `--report-type json`
   - Export to both CSV and JSON formats with `--report-name` and `--report-type csv json`
   - Specify output directory using `--dir`
+  - PDF export with `--pdf` and `--report-name` (only available for audit report for now)
 - **Improved Error Handling**: Resilient and user-friendly error messages
 - **Beautiful Terminal UI**: Styled with the Rich library for a visually appealing experience
 
@@ -47,6 +48,14 @@ It provides an overview of AWS spend by profile, service-level breakdowns, budge
   - `ec2:DescribeInstances`
   - `ec2:DescribeRegions`
   - `sts:GetCallerIdentity`
+
+- **AWS credentials with permissions (to run Audit report)**:
+  - `ec2:DescribeInstances`
+  - `ec2:DescribeVolumes`
+  - `ec2:DescribeAddresses`
+  - `budgets:DescribeBudgets`
+  - `resourcegroupstaggingapi:GetResources`
+  - `ec2:DescribeRegions`
 
 ---
 
@@ -131,6 +140,7 @@ aws-finops [options]
 | `--time-range`, `-t` | Time range for cost data in days (default: current month). Examples: 7, 30, 90. |
 | `--trend` | View cost trend analysis for the last 6 months. |
 | `--audit` | View list of untagged, unused resoruces and budget breaches. |
+| `--pdf` | Export audit report to a PDF file; can only be used along with `--audit` flag. |
 
 ### Examples
 
@@ -179,6 +189,9 @@ aws-finops --all --trend --tag Team=DevOps
 
 # View audit report for profile 'dev' in region 'us-east-1'
 aws-finops -p dev -r us-east-1 --audit
+
+# View audit report for profile 'dev' in region 'us-east-1' and export it as a pdf file to current working dir with file name 'Dev_Audit_Report'
+aws-finops -p dev -r us-east-1 --audit --pdf -n Dev_Audit_Report
 ```
 
 You'll see a live-updating table of your AWS account cost and usage details in the terminal. If export options are specified, a report file will also be generated upon completion.
@@ -215,6 +228,17 @@ When exporting to CSV, a file is generated with the following columns:
 
 When exporting to JSON, a structured file is generated that includes all dashboard data in a format that's easy to parse programmatically.
 
+### PDF Output Format (Currently works only for Audit Report)
+
+When exporting to PDF, a file is generated with the following columns:
+
+- `Profile`
+- `Account ID`
+- `Untagged Resources`
+- `Stopped EC2 Instances`
+- `Unused Volumes`
+- `Unused EIPs`
+- `Budget Alerts`
 ---
 
 ## Cost For Every Run
