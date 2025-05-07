@@ -248,9 +248,9 @@ regions = ["us-east-1", "eu-west-2"]
 combine = true
 report_name = "monthly_finops_summary"
 report_type = ["csv", "pdf"] # For cost dashboard. For audit, only PDF is used.
-dir = "./reports/aws-finops"
-time_range = 30
-tag = ["CostCenter=Alpha", "Project=Phoenix"]
+dir = "./reports/aws-finops" # Defaults to present working directory
+time_range = 30 # Defaults to 30 days
+tag = ["CostCenter=Alpha", "Project=Phoenix"] # Optional
 audit = false # Set to true to run audit report by default
 trend = false # Set to true to run trend report by default
 ```

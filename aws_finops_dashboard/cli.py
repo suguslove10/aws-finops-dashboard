@@ -134,11 +134,6 @@ def main() -> int:
         action="store_true",
         help="Display an audit report with cost anomalies, stopped EC2 instances, unused EBS columes, budget alerts, and more",
     )
-    parser.add_argument(
-        "--pdf",
-        action="store_true",
-        help="Generate a PDF audit report with untagged and unused resources",
-    )
 
     args = parser.parse_args()
 
