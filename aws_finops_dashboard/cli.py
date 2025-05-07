@@ -1,15 +1,20 @@
 import argparse
 import sys
+from typing import Any, Dict, Optional
 
 import requests
 from packaging import version
 from rich.console import Console
 
+from aws_finops_dashboard.helpers import load_config_file
+
 console = Console()
+
+__version__ = "2.2.5"
 
 
 def welcome_banner() -> None:
-    banner = r"""
+    banner = rf"""
 [bold red]
   /$$$$$$  /$$      /$$  /$$$$$$        /$$$$$$$$ /$$            /$$$$$$                     
  /$$__  $$| $$  /$ | $$ /$$__  $$      | $$_____/|__/           /$$__  $$                    
@@ -23,15 +28,44 @@ def welcome_banner() -> None:
                                                                          | $$                
                                                                          |__/                
 [/]
-[bold bright_blue]AWS FinOps Dashboard CLI (v2.2.5)[/]                                                                         
+[bold bright_blue]AWS FinOps Dashboard CLI (v{__version__})[/]                                                                         
 """
     console.print(banner)
 
 
-def parse_args() -> argparse.Namespace:
-    """Parse command line arguments for the AWS FinOps Dashboard."""
+def check_latest_version() -> None:
+    """Check for the latest version of the AWS FinOps Dashboard (CLI)."""
+    try:
+        response = requests.get(
+            "https://pypi.org/pypi/aws-finops-dashboard/json", timeout=3
+        )
+        latest = response.json()["info"]["version"]
+        if version.parse(latest) > version.parse(__version__):
+            console.print(
+                f"[bold red]A new version of AWS FinOps Dashboard is available: {latest}[/]"
+            )
+            console.print(
+                "[bold bright_yellow]Please update using:\npipx upgrade aws-finops-dashboard\nor\npip install --upgrade aws-finops-dashboard\n[/]"
+            )
+    except Exception:
+        pass
+
+
+def main() -> int:
+    """Command-line interface entry point."""
+    welcome_banner()
+    check_latest_version()
+    from aws_finops_dashboard.main import run_dashboard
+
+    # Create the parser instance to be accessible for get_default
     parser = argparse.ArgumentParser(description="AWS FinOps Dashboard CLI")
 
+    parser.add_argument(
+        "--config-file",
+        "-C",
+        help="Path to a TOML, YAML, or JSON configuration file.",
+        type=str,
+    )
     parser.add_argument(
         "--profiles",
         "-p",
@@ -67,7 +101,7 @@ def parse_args() -> argparse.Namespace:
         "-y",
         nargs="+",
         choices=["csv", "json", "pdf"],
-        help="Specify one or more report types: csv and/or json (space-separated)",
+        help="Specify one or more report types: csv and/or json and/or pdf (space-separated)",
         type=str,
         default=["csv"],
     )
@@ -83,7 +117,6 @@ def parse_args() -> argparse.Namespace:
         help="Time range for cost data in days (default: current month). Examples: 7, 30, 90",
         type=int,
     )
-
     parser.add_argument(
         "--tag",
         "-g",
@@ -91,56 +124,31 @@ def parse_args() -> argparse.Namespace:
         help="Cost allocation tag to filter resources, e.g., --tag Team=DevOps",
         type=str,
     )
-
     parser.add_argument(
         "--trend",
         action="store_true",
         help="Display a trend report as bars for the past 6 months time range",
     )
-
     parser.add_argument(
         "--audit",
         action="store_true",
         help="Display an audit report with cost anomalies, stopped EC2 instances, unused EBS columes, budget alerts, and more",
     )
 
-    parser.add_argument(
-        "--pdf",
-        action="store_true",
-        help="Generate a PDF audit report with untagged and unused resources",
-    )
+    args = parser.parse_args()
 
-    return parser.parse_args()
+    config_data: Optional[Dict[str, Any]] = None
+    if args.config_file:
+        config_data = load_config_file(args.config_file)
+        if config_data is None:
+            return 1  # Exit if config file loading failed
 
-# This Version
-__version__ = "2.2.5"
+    # Override args with config_data if present and arg is not set via CLI
+    if config_data:
+        for key, value in config_data.items():
+            if hasattr(args, key) and getattr(args, key) == parser.get_default(key):
+                setattr(args, key, value)
 
-
-def check_latest_version() -> None:
-    """Check for the latest version of the AWS FinOps Dashboard (CLI)."""
-    try:
-        response = requests.get(
-            "https://pypi.org/pypi/aws-finops-dashboard/json", timeout=3
-        )
-        latest = response.json()["info"]["version"]
-        if version.parse(latest) > version.parse(__version__):
-            console.print(
-                f"[bold red]A new version of AWS FinOps Dashboard is available: {latest}[/]"
-            )
-            console.print(
-                "[bold bright_yellow]Please update using:\npipx upgrade aws-finops-dashboard\nor\npip install --upgrade aws-finops-dashboard\n[/]"
-            )
-    except Exception:
-        pass
-
-
-def main() -> int:
-    """Command-line interface entry point."""
-    welcome_banner()
-    check_latest_version()
-    from aws_finops_dashboard.main import run_dashboard
-
-    args = parse_args()
     result = run_dashboard(args)
     return 0 if result == 0 else 1
 

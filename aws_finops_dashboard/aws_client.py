@@ -2,11 +2,11 @@ from collections import defaultdict
 from typing import Dict, List, Optional
 
 import boto3
-from botocore.exceptions import ClientError
 from boto3.session import Session
+from botocore.exceptions import ClientError
 from rich.console import Console
 
-from aws_finops_dashboard.types import EC2Summary, RegionName, BudgetInfo
+from aws_finops_dashboard.types import BudgetInfo, EC2Summary, RegionName
 
 console = Console()
 
@@ -189,7 +189,10 @@ def get_unused_eips(
             )
     return eips
 
-def get_untagged_resources(session: Session, regions: List[str]) -> Dict[str, Dict[str, List[str]]]:
+
+def get_untagged_resources(
+    session: Session, regions: List[str]
+) -> Dict[str, Dict[str, List[str]]]:
     result: Dict[str, Dict[str, List[str]]] = {
         "EC2": {},
         "RDS": {},
@@ -205,9 +208,13 @@ def get_untagged_resources(session: Session, regions: List[str]) -> Dict[str, Di
             for reservation in response["Reservations"]:
                 for instance in reservation["Instances"]:
                     if not instance.get("Tags"):
-                        result["EC2"].setdefault(region, []).append(instance["InstanceId"])
+                        result["EC2"].setdefault(region, []).append(
+                            instance["InstanceId"]
+                        )
         except Exception as e:
-            console.log(f"[yellow]Warning: Could not fetch EC2 instances in {region}: {str(e)}[/]")
+            console.log(
+                f"[yellow]Warning: Could not fetch EC2 instances in {region}: {str(e)}[/]"
+            )
 
         # RDS
         try:
@@ -217,9 +224,13 @@ def get_untagged_resources(session: Session, regions: List[str]) -> Dict[str, Di
                 arn = db_instance["DBInstanceArn"]
                 tags = rds.list_tags_for_resource(ResourceName=arn).get("TagList", [])
                 if not tags:
-                    result["RDS"].setdefault(region, []).append(db_instance["DBInstanceIdentifier"])
+                    result["RDS"].setdefault(region, []).append(
+                        db_instance["DBInstanceIdentifier"]
+                    )
         except Exception as e:
-            console.log(f"[yellow]Warning: Could not fetch RDS instances in {region}: {str(e)}[/]")
+            console.log(
+                f"[yellow]Warning: Could not fetch RDS instances in {region}: {str(e)}[/]"
+            )
 
         # Lambda
         try:
@@ -229,9 +240,13 @@ def get_untagged_resources(session: Session, regions: List[str]) -> Dict[str, Di
                 arn = function["FunctionArn"]
                 tags = lambda_client.list_tags(Resource=arn).get("Tags", {})
                 if not tags:
-                    result["Lambda"].setdefault(region, []).append(function["FunctionName"])
+                    result["Lambda"].setdefault(region, []).append(
+                        function["FunctionName"]
+                    )
         except Exception as e:
-            console.log(f"[yellow]Warning: Could not fetch Lambda functions in {region}: {str(e)}[/]")
+            console.log(
+                f"[yellow]Warning: Could not fetch Lambda functions in {region}: {str(e)}[/]"
+            )
 
         # ELBv2
         try:
@@ -239,7 +254,9 @@ def get_untagged_resources(session: Session, regions: List[str]) -> Dict[str, Di
             lbs = elbv2.describe_load_balancers().get("LoadBalancers", [])
 
             if lbs:
-                arn_to_name = {lb["LoadBalancerArn"]: lb["LoadBalancerName"] for lb in lbs}
+                arn_to_name = {
+                    lb["LoadBalancerArn"]: lb["LoadBalancerName"] for lb in lbs
+                }
                 arns = list(arn_to_name.keys())
 
                 tags_response = elbv2.describe_tags(ResourceArns=arns)
@@ -249,33 +266,35 @@ def get_untagged_resources(session: Session, regions: List[str]) -> Dict[str, Di
                         lb_name = arn_to_name.get(arn, arn)
                         result["ELBv2"].setdefault(region, []).append(lb_name)
         except Exception as e:
-            console.log(f"[yellow]Warning: Could not fetch ELBv2 load balancers in {region}: {str(e)}[/]")
+            console.log(
+                f"[yellow]Warning: Could not fetch ELBv2 load balancers in {region}: {str(e)}[/]"
+            )
 
     return result
 
+
 def get_budgets(session: Session) -> List[BudgetInfo]:
-        account_id = get_account_id(session)
-        budgets = session.client("budgets", region_name="us-east-1")
+    account_id = get_account_id(session)
+    budgets = session.client("budgets", region_name="us-east-1")
 
-        budgets_data: List[BudgetInfo] = []
-        try:
-            response = budgets.describe_budgets(AccountId=account_id)
-            for budget in response["Budgets"]:
-                budgets_data.append(
-                    {
-                        "name": budget["BudgetName"],
-                        "limit": float(budget["BudgetLimit"]["Amount"]),
-                        "actual": float(budget["CalculatedSpend"]["ActualSpend"]["Amount"]),
-                        "forecast": float(
-                            budget["CalculatedSpend"]
-                            .get("ForecastedSpend", {})
-                            .get("Amount", 0.0)
-                        )
-                        or None,
-                    }
-                )
-        except Exception as e:
-            pass
+    budgets_data: List[BudgetInfo] = []
+    try:
+        response = budgets.describe_budgets(AccountId=account_id)
+        for budget in response["Budgets"]:
+            budgets_data.append(
+                {
+                    "name": budget["BudgetName"],
+                    "limit": float(budget["BudgetLimit"]["Amount"]),
+                    "actual": float(budget["CalculatedSpend"]["ActualSpend"]["Amount"]),
+                    "forecast": float(
+                        budget["CalculatedSpend"]
+                        .get("ForecastedSpend", {})
+                        .get("Amount", 0.0)
+                    )
+                    or None,
+                }
+            )
+    except Exception as e:
+        pass
 
-        return budgets_data
-
+    return budgets_data
