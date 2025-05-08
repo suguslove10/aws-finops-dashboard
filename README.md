@@ -304,6 +304,12 @@ trend: false # Set to true to run trend report by default
 
 ![alt text](audit_report.png)
 
+## Example PDF Reports
+
+![alt text](audit_report_pdf.png)
+
+![alt text](cost_report_pdf.png)
+
 ---
 
 ## Export Formats
