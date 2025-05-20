@@ -72,19 +72,20 @@ Key benefits include:
 - **AWS CLI configured with named profiles**: Set up your AWS CLI profiles for seamless integration
 - **AWS credentials with permissions**:
   - `ce:GetCostAndUsage`
-  - `budgets:DescribeBudgets`
+  - `budgets:ViewBudget`
   - `ec2:DescribeInstances`
   - `ec2:DescribeRegions`
   - `sts:GetCallerIdentity`
-
-- **AWS credentials with permissions (to run Audit report)**:
   - `ec2:DescribeInstances`
   - `ec2:DescribeVolumes`
   - `ec2:DescribeAddresses`
-  - `budgets:DescribeBudgets`
-  - `resourcegroupstaggingapi:GetResources`
-  - `ec2:DescribeRegions`
-
+  - `rds:DescribeDBInstances`
+  - `rds:ListTagsForResource`
+  - `lambda:ListFunctions`
+  - `lambda:ListTags`
+  - `elbv2:DescribeLoadBalancers`
+  - `elbv2:DescribeTags`
+  
 ---
 
 ## Installation
