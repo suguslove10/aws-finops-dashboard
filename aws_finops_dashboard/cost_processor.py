@@ -61,6 +61,7 @@ def get_trend(session: Session, tag: Optional[List[str]] = None) -> Dict[str, An
     end_date = date.today()
     start_date = (end_date - timedelta(days=180)).replace(day=1)
     account_id = get_account_id(session)
+    profile = session.profile_name
 
     monthly_costs = []
 
@@ -87,6 +88,7 @@ def get_trend(session: Session, tag: Optional[List[str]] = None) -> Dict[str, An
     return {
         "monthly_costs": monthly_costs,
         "account_id": account_id,
+        "profile": profile,
     }
 
 

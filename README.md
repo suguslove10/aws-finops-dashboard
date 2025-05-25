@@ -60,7 +60,7 @@ Key benefits include:
   - Export to both CSV and JSON formats with `--report-name` and `--report-type csv json`
   - Specify output directory using `--dir`
   - PDF export with `--report-name` and `--report-type pdf`
-  - **Note**: Audit reports (generated via `--audit`) currently only support PDF export. Other formats specified in `--report-type` will be ignored for these reports.
+  - **Note**: Audit reports (generated via `--audit`) currently only support PDF and JSON export. Other formats specified in `--report-type` will be ignored for these reports.
 - **Improved Error Handling**: Resilient and user-friendly error messages
 - **Beautiful Terminal UI**: Styled with the Rich library for a visually appealing experience
 
