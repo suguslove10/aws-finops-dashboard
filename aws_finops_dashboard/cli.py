@@ -10,7 +10,7 @@ from aws_finops_dashboard.helpers import load_config_file
 
 console = Console()
 
-__version__ = "2.2.6"
+__version__ = "2.2.7"
 
 
 def welcome_banner() -> None:

@@ -29,6 +29,9 @@ from aws_finops_dashboard.helpers import (
     clean_rich_tags,
     export_audit_report_to_pdf,
     export_cost_dashboard_to_pdf,
+    export_audit_report_to_csv,
+    export_audit_report_to_json,
+    export_trend_data_to_json
 )
 from aws_finops_dashboard.profile_processor import (
     process_combined_profiles,
@@ -97,6 +100,7 @@ def _run_audit_report(profiles_to_use: List[str], args: argparse.Namespace) -> N
     )
 
     audit_data = []
+    raw_audit_data = []
     nl = "\n"
     comma_nl = ",\n"
 
@@ -160,6 +164,19 @@ def _run_audit_report(profiles_to_use: List[str], args: argparse.Namespace) -> N
             }
         )
 
+        # Data for JSON which includes raw audit data
+        raw_audit_data.append(
+            {
+                "profile": profile,
+                "account_id": account_id,
+                "untagged_resources": untagged,
+                "stopped_instances": stopped,
+                "unused_volumes": unused_vols,
+                "unused_eips": unused_eips,
+                "budget_alerts": budget_data,
+            }
+        )
+
         table.add_row(
             f"[dark_magenta]{profile}[/]",
             account_id,
@@ -175,21 +192,38 @@ def _run_audit_report(profiles_to_use: List[str], args: argparse.Namespace) -> N
     )
 
     if args.report_name:  # Ensure report_name is provided for any export
-        if args.report_type and "pdf" in args.report_type:
-            pdf_path = export_audit_report_to_pdf(
-                audit_data_list=audit_data,
-                file_name=args.report_name,
-                path=args.dir,
-            )
-            if pdf_path:
-                console.print(f"Successfully exported audit report to PDF: {pdf_path}")
-            else:
-                console.print("[bold red]Failed to export audit report to PDF.[/]")
-
+        if args.report_type:
+            for report_type in args.report_type:
+                if report_type == "csv":
+                    csv_path = export_audit_report_to_csv(
+                        audit_data, args.report_name, args.dir
+                    )
+                    if csv_path:
+                        console.print(
+                            f"[bright_green]Successfully exported to CSV format: {csv_path}[/]"
+                        )
+                elif report_type == "json":
+                    json_path = export_audit_report_to_json(
+                        raw_audit_data, args.report_name, args.dir
+                    )
+                    if json_path:
+                        console.print(
+                            f"[bright_green]Successfully exported to JSON format: {json_path}[/]"
+                        )
+                elif report_type == "pdf":
+                    pdf_path = export_audit_report_to_pdf(
+                        audit_data, args.report_name, args.dir
+                    )
+                    if pdf_path:
+                        console.print(
+                            f"[bright_green]Successfully exported to PDF format: {pdf_path}[/]"
+                        )
+                
 
 def _run_trend_analysis(profiles_to_use: List[str], args: argparse.Namespace) -> None:
     """Analyze and display cost trends."""
     console.print("[bold bright_cyan]Analysing cost trends...[/]")
+    raw_trend_data = []
     if args.combine:
         account_profiles = defaultdict(list)
         for profile in profiles_to_use:
@@ -220,11 +254,13 @@ def _run_trend_analysis(profiles_to_use: List[str], args: argparse.Namespace) ->
                 console.print(
                     f"\n[bright_yellow]Account: {account_id} (Profiles: {profile_list})[/]"
                 )
+                raw_trend_data.append(cost_data)
                 create_trend_bars(trend_data)
             except Exception as e:
                 console.print(
                     f"[red]Error getting trend for account {account_id}: {str(e)}[/]"
                 )
+
     else:
         for profile in profiles_to_use:
             try:
@@ -242,10 +278,21 @@ def _run_trend_analysis(profiles_to_use: List[str], args: argparse.Namespace) ->
                 console.print(
                     f"\n[bright_yellow]Account: {account_id} (Profile: {profile})[/]"
                 )
+                raw_trend_data.append(cost_data)
                 create_trend_bars(trend_data)
             except Exception as e:
                 console.print(
                     f"[red]Error getting trend for profile {profile}: {str(e)}[/]"
+                )
+
+    if raw_trend_data and args.report_name and args.report_type:
+        if "json" in args.report_type:
+            json_path = export_trend_data_to_json(
+                raw_trend_data, args.report_name, args.dir
+            )
+            if json_path:
+                console.print(
+                    f"[bright_green]Successfully exported trend data to JSON format: {json_path}[/]"
                 )
 
 

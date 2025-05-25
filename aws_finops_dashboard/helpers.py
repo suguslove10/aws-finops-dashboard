@@ -192,12 +192,10 @@ def export_audit_report_to_csv(
         console.print(f"[bold red]Error exporting audit report to CSV: {str(e)}[/]")
         return None
 
-
 def export_audit_report_to_json(
-    audit_data_list: List[Dict[str, str]],
-    file_name: str = "audit_report",
-    path: Optional[str] = None,
-) -> Optional[str]:
+        raw_audit_data: List[Dict[str, Any]],
+        file_name: str = "audit_report",
+        path: Optional[str] = None) -> Optional[str]:
     """Export the audit report to a JSON file."""
     try:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M")
@@ -207,13 +205,32 @@ def export_audit_report_to_json(
             os.makedirs(path, exist_ok=True)
             output_filename = os.path.join(path, base_filename)
 
-        with open(output_filename, "w") as jsonfile:
-            json.dump(audit_data_list, jsonfile, indent=4)
+        with open(output_filename, "w", encoding="utf-8") as jsonfile:
+            json.dump(raw_audit_data, jsonfile, indent=4) # Use the structured list
         return output_filename
     except Exception as e:
         console.print(f"[bold red]Error exporting audit report to JSON: {str(e)}[/]")
         return None
+    
+def export_trend_data_to_json(
+    trend_data: List[Dict[str, Any]],
+    file_name: str = "trend_data",
+    path: Optional[str] = None) -> Optional[str]:
+    """Export trend data to a JSON file."""
+    try:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+        base_filename = f"{file_name}_{timestamp}.json"
+        output_filename = base_filename
+        if path:
+            os.makedirs(path, exist_ok=True)
+            output_filename = os.path.join(path, base_filename)
 
+        with open(output_filename, "w", encoding="utf-8") as jsonfile:
+            json.dump(trend_data, jsonfile, indent=4)
+        return output_filename
+    except Exception as e:
+        console.print(f"[bold red]Error exporting trend data to JSON: {str(e)}[/]")
+        return None
 
 def export_cost_dashboard_to_pdf(
     data: List[ProfileData],
