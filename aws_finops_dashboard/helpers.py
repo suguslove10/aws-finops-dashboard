@@ -261,6 +261,105 @@ def export_trend_data_to_json(
         console.print(f"[bold red]Error exporting trend data to JSON: {e}[/]")
         return None
 
+def export_cost_dashboard_to_csv(
+    export_data: List[Dict[str, Any]],
+    file_name: str = "cost_report",
+    path: Optional[str] = None,
+) -> Optional[str]:
+    """Export the cost dashboard data to a CSV file."""
+    try:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+        base_filename = f"{file_name}_{timestamp}.csv"
+        output_filename = base_filename
+        if path:
+            os.makedirs(path, exist_ok=True)
+            output_filename = os.path.join(path, base_filename)
+
+        headers = [
+            "Profile",
+            "Account ID",
+            "Last Month Cost",
+            "Current Month Cost",
+            "Percentage Change",
+            "Budget Status",
+            "EC2 Running",
+            "EC2 Stopped",
+        ]
+
+        with open(output_filename, "w", newline="") as csvfile:
+            writer = csv.writer(csvfile)
+            writer.writerow(headers)
+            for item in export_data:
+                if item["success"]:
+                    writer.writerow([
+                        item.get("profile", ""),
+                        item.get("account_id", ""),
+                        item.get("last_month", 0),
+                        item.get("current_month", 0),
+                        f"{item.get('percent_change_in_total_cost', 0):.2f}%",
+                        "; ".join(item.get("budget_info", [])),
+                        item.get("ec2_summary", {}).get("running", 0),
+                        item.get("ec2_summary", {}).get("stopped", 0),
+                    ])
+                else:
+                    writer.writerow([
+                        item.get("profile", ""),
+                        "",
+                        "Error",
+                        "Error",
+                        "",
+                        "",
+                        "",
+                        "",
+                    ])
+        return output_filename
+    except Exception as e:
+        console.print(f"[bold red]Error exporting cost dashboard to CSV: {str(e)}[/]")
+        return None
+
+def export_cost_dashboard_to_json(
+    export_data: List[Dict[str, Any]],
+    file_name: str = "cost_report",
+    path: Optional[str] = None,
+) -> Optional[str]:
+    """Export the cost dashboard data to a JSON file."""
+    try:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+        base_filename = f"{file_name}_{timestamp}.json"
+        output_filename = base_filename
+        if path:
+            os.makedirs(path, exist_ok=True)
+            output_filename = os.path.join(path, base_filename)
+
+        # Create a deep copy to avoid modifying the original data
+        json_data = []
+        for profile_data in export_data:
+            # Make a copy of the data without rich formatting
+            clean_data = {}
+            for key, value in profile_data.items():
+                if isinstance(value, str):
+                    clean_data[key] = clean_rich_tags(value)
+                elif isinstance(value, list) and all(isinstance(item, str) for item in value):
+                    clean_data[key] = [clean_rich_tags(item) for item in value]
+                elif isinstance(value, dict):
+                    clean_dict = {}
+                    for k, v in value.items():
+                        if isinstance(v, str):
+                            clean_dict[k] = clean_rich_tags(v)
+                        else:
+                            clean_dict[k] = v
+                    clean_data[key] = clean_dict
+                else:
+                    clean_data[key] = value
+            json_data.append(clean_data)
+
+        with open(output_filename, "w", encoding="utf-8") as jsonfile:
+            json.dump(json_data, jsonfile, indent=4)
+        return output_filename
+    except Exception as e:
+        console.print(f"[bold red]Error exporting cost dashboard to JSON: {str(e)}[/]")
+        return None
+
 def export_cost_dashboard_to_pdf(
     data: List[ProfileData],
     filename: str,
