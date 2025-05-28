@@ -1,0 +1,37 @@
+/* RegionSelector specific styles */
+
+/* Fix for region item layout to prevent text overflow */
+.region-item {
+  display: flex !important;
+  width: 100% !important;
+  overflow: hidden !important;
+}
+
+.region-item-label {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  display: block !important;
+  max-width: calc(100% - 30px) !important;
+}
+
+/* Improve container layout */
+.regions-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)) !important;
+  gap: 10px !important;
+}
+
+/* Additional spacing for region items */
+.region-checkbox {
+  flex-shrink: 0 !important;
+  margin-right: 8px !important;
+}
+
+/* Ensure proper alignment of checkbox and text */
+.region-item-wrapper {
+  display: flex !important;
+  align-items: center !important;
+  width: 100% !important;
+  min-width: 0 !important;
+} 

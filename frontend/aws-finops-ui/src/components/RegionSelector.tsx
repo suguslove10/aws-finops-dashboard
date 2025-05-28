@@ -9,6 +9,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { LoadingSpinner } from './LoadingSpinner';
 import { ErrorFeedback } from './ErrorFeedback';
 
+// Add CSS with styles to handle region overflow issues
+import './RegionSelector.css';
+
 interface RegionSelectorProps {
   selectedRegions: string[];
   onSelectRegions: (regions: string[]) => void;
@@ -127,19 +130,23 @@ export function RegionSelector({ selectedRegions, onSelectRegions }: RegionSelec
         </div>
         <Text className="mt-2 mb-5 text-gray-600 dark:text-gray-300">Select the AWS regions to include in the analysis</Text>
 
-        <div className="flex flex-wrap justify-between items-center mb-4 gap-2">
+        <div className="flex flex-wrap justify-between items-center mb-6 gap-2">
           <div className="text-xs text-gray-500 dark:text-gray-400 font-medium">
             {selectedRegions.length} of {regions?.length} regions selected
           </div>
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
+          <div 
+            className="text-sm text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium flex items-center bg-white dark:bg-gray-800 px-4 py-2 rounded-full shadow-sm cursor-pointer" 
             onClick={handleSelectAll}
-            className="text-sm text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium flex items-center bg-white dark:bg-gray-800 px-4 py-2 rounded-full shadow-sm"
           >
-            <FaMapMarkerAlt className="mr-2" />
-            {selectedRegions.length === regions?.length ? 'Deselect All' : 'Select All'}
-          </motion.button>
+            <motion.div
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              style={{ display: 'flex', alignItems: 'center' }}
+            >
+              <FaMapMarkerAlt className="mr-2" />
+              {selectedRegions.length === regions?.length ? 'Deselect All' : 'Select All'}
+            </motion.div>
+          </div>
         </div>
 
         <div className="space-y-5">
@@ -151,121 +158,140 @@ export function RegionSelector({ selectedRegions, onSelectRegions }: RegionSelec
             const selectedCount = filteredGroupRegions.filter(region => selectedRegions.includes(region)).length;
             
             return (
-              <motion.div 
+              <div 
                 key={group}
-                layout
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3 }}
                 className={`bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 ${
                   activeRegion === group ? 'ring-2 ring-blue-500 dark:ring-blue-400' : ''
                 }`}
               >
-                <div className="flex flex-wrap items-center justify-between mb-3 gap-2">
-                  <div className="flex items-center flex-grow min-w-0 mr-2">
-                    <motion.button 
-                      className="flex items-center group text-left"
-                      onClick={() => setActiveRegion(activeRegion === group ? null : group)}
-                    >
-                      <span className="flex-shrink-0 mr-2 text-xl">
-                        {regionIcons[group as keyof typeof regionIcons]}
-                      </span>
-                      <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                        {group}
-                      </h3>
-                    </motion.button>
-                    
-                    <div className="ml-2 text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
-                      {filteredGroupRegions.length} regions
+                <motion.div 
+                  layout
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <div className="flex flex-wrap items-center justify-between mb-3 gap-2">
+                    <div className="flex items-center flex-grow min-w-0 mr-2">
+                      <div 
+                        className="flex items-center group text-left cursor-pointer"
+                        onClick={() => setActiveRegion(activeRegion === group ? null : group)}
+                      >
+                        <motion.div style={{ display: 'flex', alignItems: 'center' }}>
+                          <span className="flex-shrink-0 mr-2 text-xl">
+                            {regionIcons[group as keyof typeof regionIcons]}
+                          </span>
+                          <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                            {group}
+                          </h3>
+                        </motion.div>
+                      </div>
+                      
+                      <div className="ml-2 text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                        {filteredGroupRegions.length} regions
+                      </div>
+                      
+                      {someGroupSelected && (
+                        <div className="ml-2 text-xs px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400">
+                          {selectedCount}/{filteredGroupRegions.length} selected
+                        </div>
+                      )}
                     </div>
                     
-                    {someGroupSelected && (
-                      <div className="ml-2 text-xs px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400">
-                        {selectedCount}/{filteredGroupRegions.length} selected
-                      </div>
-                    )}
+                    <div
+                      onClick={() => handleSelectGroup(groupRegions)}
+                      className={`
+                        flex items-center justify-center w-7 h-7 rounded-md transition-colors flex-shrink-0 cursor-pointer
+                        ${selectionState === 'all' 
+                          ? 'bg-blue-500 text-white' 
+                          : selectionState === 'some' 
+                          ? 'bg-blue-200 dark:bg-blue-800 text-blue-700 dark:text-blue-300' 
+                          : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:bg-blue-100 dark:hover:bg-blue-900/30'
+                        }
+                      `}
+                      aria-label={allGroupSelected ? `Deselect all ${group} regions` : `Select all ${group} regions`}
+                    >
+                      <motion.div
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      >
+                        {selectionState === 'all' ? <FaCheckCircle size={14} /> : selectionState === 'some' ? '-' : '+'}
+                      </motion.div>
+                    </div>
                   </div>
                   
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => handleSelectGroup(groupRegions)}
-                    className={`
-                      flex items-center justify-center w-7 h-7 rounded-md transition-colors flex-shrink-0
-                      ${selectionState === 'all' 
-                        ? 'bg-blue-500 text-white' 
-                        : selectionState === 'some' 
-                        ? 'bg-blue-200 dark:bg-blue-800 text-blue-700 dark:text-blue-300' 
-                        : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:bg-blue-100 dark:hover:bg-blue-900/30'
-                      }
-                    `}
-                    aria-label={allGroupSelected ? `Deselect all ${group} regions` : `Select all ${group} regions`}
-                  >
-                    {selectionState === 'all' ? <FaCheckCircle size={14} /> : selectionState === 'some' ? '-' : '+'}
-                  </motion.button>
-                </div>
-                
-                <AnimatePresence>
-                  {(activeRegion === group || activeRegion === null) && (
-                    <motion.div 
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      exit={{ opacity: 0, height: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className={`
-                        grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 overflow-hidden
-                        ${filteredGroupRegions.length > 6 && activeRegion === group ? 'max-h-60 overflow-y-auto pr-1 pb-1' : ''}
-                      `}
-                    >
-                      {filteredGroupRegions.map((region, index) => (
+                  <AnimatePresence>
+                    {(activeRegion === group || activeRegion === null) && (
+                      <div 
+                        className={`
+                          grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 overflow-hidden
+                          ${filteredGroupRegions.length > 6 && activeRegion === group ? 'max-h-60 overflow-y-auto pr-1 pb-1' : ''}
+                        `}
+                      >
                         <motion.div 
-                          key={region}
-                          initial={{ opacity: 0, y: 5 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ duration: 0.2, delay: index * 0.03 }}
-                          onClick={() => handleRegionChange(region)}
-                          className={`
-                            flex items-center p-2.5 rounded-lg transition-all cursor-pointer
-                            ${selectedRegions.includes(region)
-                              ? regionColors[group as keyof typeof regionColors] || 'bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/60'
-                              : 'bg-gray-50 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 hover:border-blue-200 dark:hover:border-blue-800/60'
-                            }
-                          `}
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          transition={{ duration: 0.2 }}
                         >
-                          <div className="relative flex items-center justify-center flex-shrink-0">
-                            <input
-                              type="checkbox"
-                              id={`region-${region}`}
-                              className="sr-only"
-                              checked={selectedRegions.includes(region)}
-                              onChange={() => {}} // handled by parent div click
-                            />
-                            <div 
-                              className={`
-                                h-5 w-5 flex items-center justify-center rounded transition-colors duration-200
-                                ${selectedRegions.includes(region)
-                                  ? 'bg-blue-600 border-blue-600 dark:bg-blue-500 dark:border-blue-500'
-                                  : 'border border-gray-300 dark:border-gray-600'
-                                }
-                              `}
-                            >
-                              {selectedRegions.includes(region) && (
-                                <FaCheckCircle className="text-white text-xs" />
-                              )}
-                            </div>
+                          <div className="regions-grid">
+                            {filteredGroupRegions.map((region, index) => (
+                              <div 
+                                key={region}
+                                onClick={() => handleRegionChange(region)}
+                                className={`
+                                  region-item p-2.5 rounded-lg transition-all cursor-pointer
+                                  ${selectedRegions.includes(region)
+                                    ? regionColors[group as keyof typeof regionColors] || 'bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/60'
+                                    : 'bg-gray-50 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 hover:border-blue-200 dark:hover:border-blue-800/60'
+                                  }
+                                `}
+                              >
+                                <motion.div 
+                                  initial={{ opacity: 0, y: 5 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  transition={{ duration: 0.2, delay: index * 0.03 }}
+                                >
+                                  <div className="region-item-wrapper">
+                                    <div className="region-checkbox">
+                                      <input
+                                        type="checkbox"
+                                        id={`region-${region}`}
+                                        className="sr-only"
+                                        checked={selectedRegions.includes(region)}
+                                        onChange={() => {}} // handled by parent div click
+                                      />
+                                      <div 
+                                        className={`
+                                          h-5 w-5 flex items-center justify-center rounded transition-colors duration-200
+                                          ${selectedRegions.includes(region)
+                                            ? 'bg-blue-600 border-blue-600 dark:bg-blue-500 dark:border-blue-500'
+                                            : 'border border-gray-300 dark:border-gray-600'
+                                          }
+                                        `}
+                                      >
+                                        {selectedRegions.includes(region) && (
+                                          <FaCheckCircle className="text-white text-xs" />
+                                        )}
+                                      </div>
+                                    </div>
+                                    <label 
+                                      htmlFor={`region-${region}`} 
+                                      className="region-item-label ml-3 text-sm text-gray-800 dark:text-gray-200 font-medium cursor-pointer"
+                                    >
+                                      {region}
+                                    </label>
+                                  </div>
+                                </motion.div>
+                              </div>
+                            ))}
                           </div>
-                          <label 
-                            htmlFor={`region-${region}`} 
-                            className="ml-3 text-sm text-gray-800 dark:text-gray-200 font-medium cursor-pointer truncate"
-                          >
-                            {region}
-                          </label>
                         </motion.div>
-                      ))}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </motion.div>
+                      </div>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
+              </div>
             );
           })}
         </div>
