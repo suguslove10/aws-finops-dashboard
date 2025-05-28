@@ -7,6 +7,7 @@ Pygments==2.19.1
 python-dateutil==2.9.0.post0
 rich>=13.5.2
 s3transfer==0.11.4
+setuptools>=42.0.0
 six==1.17.0
 urllib3==2.3.0
 requests>=2.31.0

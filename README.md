@@ -53,6 +53,7 @@ Key features include:
 - **EC2 Instance Status**: Detailed state information across specified/accessible regions
 - **Cost Trend Analysis**: View detailed cost trends in bar charts for the last 6 months across AWS profiles
 - **FinOps Audit**: View untagged resources, unused or stopped resources, and Budget breaches across AWS profiles. 
+- **Reserved Instance & Savings Plan Optimization**: Get data-driven recommendations for Reserved Instance purchases and Savings Plan commitments based on usage patterns, with estimated savings potential.
 - **Profile Management**:
   - Automatic profile detection
   - Specific profile selection with `--profiles`
@@ -185,6 +186,8 @@ aws-finops [options]
 | `--skip-savings-plans` | Skip Savings Plans analysis when generating optimization recommendations. |
 | `--currency`, `-u` | Currency to display costs in (choices: USD, INR, EUR, GBP, JPY, AUD, CAD, CNY, default: USD). |
 | `--enhanced-pdf` | Generate enhanced PDF reports with visualizations and executive summary. |
+| `--ri-optimizer` | Generate Reserved Instance and Savings Plan recommendations based on usage patterns. |
+| `--lookback-days` | Number of days to analyze for RI and Savings Plan recommendations (default: 30). |
 
 ### Examples
 
@@ -265,6 +268,15 @@ aws-finops --all --report-name aws_costs_eur --report-type pdf -u EUR
 
 # Generate enhanced PDF report with visualizations and executive summary
 aws-finops --all --report-name enhanced_report --report-type pdf --enhanced-pdf
+
+# Generate RI and Savings Plan recommendations for all profiles
+aws-finops --all --ri-optimizer
+
+# Generate RI and Savings Plan recommendations with custom lookback period
+aws-finops --profiles dev prod --ri-optimizer --lookback-days 60
+
+# Generate RI and Savings Plan recommendations and export to PDF
+aws-finops --all --ri-optimizer --report-name ri_recommendations --report-type pdf
 ```
 
 You'll see a live-updating table of your AWS account cost and usage details in the terminal. If export options are specified, a report file will also be generated upon completion.

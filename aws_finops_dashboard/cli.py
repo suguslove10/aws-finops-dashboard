@@ -1,21 +1,24 @@
 import argparse
+import os
 import sys
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
-import requests
 from packaging import version
 from rich.console import Console
+import boto3
 
 from aws_finops_dashboard.helpers import load_config_file
+from aws_finops_dashboard.dashboard_runner import run_dashboard
+from aws_finops_dashboard.ri_optimizer import RIOptimizer
+from aws_finops_dashboard.aws_client import get_aws_profiles
 
 console = Console()
 
-__version__ = "2.3.0"
 
-
-def welcome_banner() -> None:
-    banner = rf"""
-[bold red]
+def welcome_banner():
+    """Display a welcome banner."""
+    print(
+        """
   /$$$$$$  /$$      /$$  /$$$$$$        /$$$$$$$$ /$$            /$$$$$$                     
  /$$__  $$| $$  /$ | $$ /$$__  $$      | $$_____/|__/           /$$__  $$                    
 | $$  \ $$| $$ /$$$| $$| $$  \__/      | $$       /$$ /$$$$$$$ | $$  \ $$  /$$$$$$   /$$$$$$$
@@ -27,27 +30,42 @@ def welcome_banner() -> None:
                                                                          | $$                
                                                                          | $$                
                                                                          |__/                
-[/]
-[bold bright_blue]AWS FinOps Dashboard CLI (v{__version__})[/]                                                                         
 """
-    console.print(banner)
+    )
+    import pkg_resources
 
-
-def check_latest_version() -> None:
-    """Check for the latest version of the AWS FinOps Dashboard (CLI)."""
     try:
-        response = requests.get(
-            "https://pypi.org/pypi/aws-finops-dashboard/json", timeout=3
+        version_str = pkg_resources.get_distribution("aws-finops-dashboard").version
+        print(f"AWS FinOps Dashboard CLI (v{version_str})")
+        print()
+    except pkg_resources.DistributionNotFound:
+        print("AWS FinOps Dashboard CLI (development version)")
+        print()
+
+
+def check_latest_version():
+    """Check for the latest version of the package."""
+    try:
+        import requests
+
+        current_version = version.parse(
+            pkg_resources.get_distribution("aws-finops-dashboard").version
         )
-        latest = response.json()["info"]["version"]
-        if version.parse(latest) > version.parse(__version__):
+        response = requests.get(
+            "https://pypi.org/pypi/aws-finops-dashboard/json", timeout=1
+        )
+        latest_version = version.parse(response.json()["info"]["version"])
+
+        if latest_version > current_version:
             console.print(
-                f"[bold red]A new version of AWS FinOps Dashboard is available: {latest}[/]"
+                f"[yellow]A new version of AWS FinOps Dashboard is available: {latest_version} (current: {current_version})[/]"
             )
             console.print(
-                "[bold bright_yellow]Please update using:\npipx upgrade aws-finops-dashboard\nor\npip install --upgrade aws-finops-dashboard\n[/]"
+                "[yellow]Run 'pip install --upgrade aws-finops-dashboard' to update.[/]"
             )
+            print()
     except Exception:
+        # Silently ignore any errors when checking for updates
         pass
 
 
@@ -55,11 +73,11 @@ def main() -> int:
     """Command-line interface entry point."""
     welcome_banner()
     check_latest_version()
-    from aws_finops_dashboard.main import run_dashboard
 
     # Create the parser instance to be accessible for get_default
     parser = argparse.ArgumentParser(description="AWS FinOps Dashboard CLI")
 
+    # Add all arguments
     parser.add_argument(
         "--config-file",
         "-C",
@@ -120,7 +138,6 @@ def main() -> int:
     parser.add_argument(
         "--tag",
         "-g",
-        nargs="+",
         help="Cost allocation tag to filter resources, e.g., --tag Team=DevOps",
         type=str,
     )
@@ -142,8 +159,8 @@ def main() -> int:
     parser.add_argument(
         "--anomaly-sensitivity",
         type=float,
-        default=0.05,
-        help="Sensitivity for anomaly detection (0.01-0.1, lower values are more sensitive)",
+        default=2.0,
+        help="Sensitivity for anomaly detection (default: 2.0)",
     )
     parser.add_argument(
         "--optimize",
@@ -179,6 +196,18 @@ def main() -> int:
         action="store_true",
         help="Generate enhanced PDF reports with visualizations and executive summary",
     )
+    # Add the new RI optimizer arguments
+    parser.add_argument(
+        "--ri-optimizer",
+        action="store_true",
+        help="Generate Reserved Instance and Savings Plan recommendations",
+    )
+    parser.add_argument(
+        "--lookback-days",
+        type=int,
+        default=30,
+        help="Number of days to analyze for RI recommendations (default: 30)",
+    )
 
     args = parser.parse_args()
 
@@ -194,8 +223,77 @@ def main() -> int:
             if hasattr(args, key) and getattr(args, key) == parser.get_default(key):
                 setattr(args, key, value)
 
+    # Handle RI optimizer command specifically
+    if args.ri_optimizer:
+        run_ri_optimizer(args)
+        return 0
+
     result = run_dashboard(args)
     return 0 if result == 0 else 1
+
+
+def run_ri_optimizer(args):
+    """Run the RI optimizer with the given arguments."""
+    # Get AWS session based on arguments
+    profiles = []
+
+    if args.profiles:
+        profiles = args.profiles
+    elif args.all:
+        profiles = get_aws_profiles()
+    else:
+        default_profile = "default"
+        if default_profile in get_aws_profiles():
+            profiles = [default_profile]
+        else:
+            profiles = get_aws_profiles()
+
+    if not profiles:
+        console.print("[bold red]No AWS profiles found. Please configure AWS CLI first.[/]")
+        sys.exit(1)
+    
+    console.print("[bold cyan]===== AWS Reserved Instance & Savings Plan Optimizer =====[/]\n")
+    console.print("[bright_blue]Analyzing usage patterns to generate cost-saving recommendations...[/]\n")
+
+    for profile in profiles:
+        console.print(f"[bold bright_magenta]Analyzing profile: {profile}[/]")
+        session = boto3.Session(profile_name=profile)
+        
+        # Create and run the optimizer
+        optimizer = RIOptimizer(session, args.lookback_days)
+        optimizer.display_recommendations()
+        
+        # Force PDF generation if requested
+        if args.report_name and 'pdf' in args.report_type:
+            console.print(f"\n[bright_cyan]Exporting PDF report for {profile}...[/]")
+            
+            from aws_finops_dashboard.dashboard_runner import _export_ri_recommendations_to_pdf
+            
+            try:
+                # Get recommendations
+                ri_recommendations = optimizer.get_ri_recommendations()
+                sp_recommendations = optimizer.get_savings_plan_recommendations()
+                
+                # Get account ID
+                account_id = session.client('sts').get_caller_identity().get('Account', 'Unknown')
+                
+                # Force export to PDF
+                _export_ri_recommendations_to_pdf(
+                    profile,
+                    account_id,
+                    ri_recommendations,
+                    sp_recommendations,
+                    args.report_name,
+                    args.dir
+                )
+                console.print(f"[bright_green]PDF report generated successfully![/]")
+            except Exception as e:
+                console.print(f"[bold red]Error generating PDF: {str(e)}[/]")
+                import traceback
+                console.print(traceback.format_exc())
+        
+    console.print("\n[bright_green]Analysis complete![/]")
+    console.print("[yellow]Note: These recommendations are based on historical usage patterns. Review carefully before purchasing.[/]")
 
 
 if __name__ == "__main__":
