@@ -435,9 +435,8 @@ def _generate_dashboard_data(
                     f"[bold red]Error checking account ID for profile {profile}: {str(e)}[/]"
                 )
 
-        for account_id_key, profiles_list in track(  # Renamed loop variables
-            account_profiles.items(), description="[bright_cyan]Fetching cost data..."
-        ):
+        console.print("[bright_cyan]Fetching cost data...[/]")
+        for account_id_key, profiles_list in account_profiles.items():
             # account_id_key here is known to be a string because it's a key from account_profiles
             # where None keys were filtered out when populating it.
             if len(profiles_list) > 1:
@@ -451,9 +450,8 @@ def _generate_dashboard_data(
             export_data.append(profile_data)
             add_profile_to_table(table, profile_data, args.currency)
     else:
-        for profile in track(
-            profiles_to_use, description="[bright_cyan]Fetching cost data..."
-        ):
+        console.print("[bright_cyan]Fetching cost data...[/]")
+        for profile in profiles_to_use:
             profile_data = process_single_profile(
                 profile, user_regions, time_range, args.tag
             )
@@ -519,7 +517,8 @@ def _run_anomaly_detection(profiles_to_use: List[str], args: argparse.Namespace)
     from rich import box
     from rich.table import Table
     
-    for profile in track(profiles_to_use, description="Analyzing profiles for anomalies..."):
+    console.print("[bright_cyan]Analyzing profiles for anomalies...[/]")
+    for profile in profiles_to_use:
         console.print(f"[bold bright_magenta]Analyzing profile: {profile}[/]")
         
         session = boto3.Session(profile_name=profile)
@@ -592,7 +591,8 @@ def _run_optimization_recommendations(profiles_to_use: List[str], args: argparse
     from rich import box
     from rich.table import Table
     
-    for profile in track(profiles_to_use, description="Analyzing profiles for optimization opportunities..."):
+    console.print("[bright_cyan]Analyzing profiles for optimization opportunities...[/]")
+    for profile in profiles_to_use:
         console.print(f"[bold bright_magenta]Analyzing profile: {profile}[/]")
         
         session = boto3.Session(profile_name=profile)
