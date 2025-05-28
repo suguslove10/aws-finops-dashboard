@@ -471,31 +471,31 @@ def generate_optimization_recommendations(
     
     # Analyze EC2 instances for right-sizing
     if analyze_ec2:
-        with Status("[bold green]Analyzing EC2 instances for right-sizing..."):
-            result["ec2_recommendations"] = analyze_ec2_right_sizing(
-                session, regions=regions, cpu_threshold=cpu_threshold
-            )
-            result["summary"]["ec2_savings"] = sum(rec["savings"] for rec in result["ec2_recommendations"])
+        console.print("[bold green]Analyzing EC2 instances for right-sizing...[/]")
+        result["ec2_recommendations"] = analyze_ec2_right_sizing(
+            session, regions=regions, cpu_threshold=cpu_threshold
+        )
+        result["summary"]["ec2_savings"] = sum(rec["savings"] for rec in result["ec2_recommendations"])
     
     # Analyze unused resources
     if analyze_resources:
-        with Status("[bold green]Analyzing unused resources..."):
-            result["resource_recommendations"] = analyze_unused_resources(
-                session, regions=regions
-            )
-            result["summary"]["resource_savings"] = sum(rec["savings"] for rec in result["resource_recommendations"])
+        console.print("[bold green]Analyzing unused resources...[/]")
+        result["resource_recommendations"] = analyze_unused_resources(
+            session, regions=regions
+        )
+        result["summary"]["resource_savings"] = sum(rec["savings"] for rec in result["resource_recommendations"])
     
     # Analyze RI opportunities
     if analyze_reservations:
-        with Status("[bold green]Analyzing Reserved Instance opportunities..."):
-            result["ri_recommendations"] = analyze_ri_opportunities(session)
-            result["summary"]["ri_savings"] = sum(rec["monthly_savings"] for rec in result["ri_recommendations"])
+        console.print("[bold green]Analyzing Reserved Instance opportunities...[/]")
+        result["ri_recommendations"] = analyze_ri_opportunities(session)
+        result["summary"]["ri_savings"] = sum(rec["monthly_savings"] for rec in result["ri_recommendations"])
     
     # Analyze Savings Plans opportunities
     if analyze_savings_plans:
-        with Status("[bold green]Analyzing Savings Plans opportunities..."):
-            result["savings_plans_recommendations"] = analyze_savings_plans_opportunities(session)
-            result["summary"]["savings_plans_savings"] = sum(rec["monthly_savings"] for rec in result["savings_plans_recommendations"])
+        console.print("[bold green]Analyzing Savings Plans opportunities...[/]")
+        result["savings_plans_recommendations"] = analyze_savings_plans_opportunities(session)
+        result["summary"]["savings_plans_savings"] = sum(rec["monthly_savings"] for rec in result["savings_plans_recommendations"])
     
     # Calculate total potential savings
     result["summary"]["total_potential_savings"] = (
