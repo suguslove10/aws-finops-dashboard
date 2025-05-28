@@ -36,7 +36,7 @@ export function ProfileSelector({
     refetch 
   } = useQuery({
     queryKey: ['profiles', showDetailedView],
-    queryFn: () => fetchProfiles(showDetailedView),
+    queryFn: () => fetchProfiles(showDetailedView ? 'full' : 'basic'),
     retry: 1
   });
   
