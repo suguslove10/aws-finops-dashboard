@@ -11,11 +11,16 @@ The AWS FinOps Dashboard is an open-source, Python-based command-line tool (buil
 
 Managing and understanding your AWS expenditure, especially across multiple accounts and services, can be complex. The AWS FinOps Dashboard CLI aims to simplify this by providing a clear, concise, and actionable view of your AWS costs and operational hygiene directly in your terminal.
 
-Key benefits include:
-*   **Unified View:** Consolidate cost and resource data from multiple AWS profiles.
-*   **Actionable Insights:** Quickly identify spending patterns, untagged resources, and potential savings.
-*   **Terminal-First:** Access crucial FinOps data without leaving your command line.
-*   **Customizable & Extensible:** Open-source and built with Python, allowing for easy customization.
+Key features include:
+*   **Unified View:** Consolidate cost and resource data from multiple AWS accounts.
+![alt text](aws-finops-dashboard-v2.2.3.png)
+* **Cost Trend Analysis:** View how your AWS costs have been for the past six months.
+![alt text](aws-finops-dashboard_trend.png)
+*   **Audit Your AWS Accounts:** Quickly identify spending patterns, untagged resources, underutilised resources and potential savings.
+![alt text](audit_report.png)
+*   **Generate Cost & Audit Reports:** You can generate Cost, Trend and Audit Reports in PDF, CSV & JSON formats for further analysis and reporting purposes.
+![alt text](audit_report_pdf.png)
+![alt text](cost_report_pdf.png)
 
 ## Table of Contents
 
@@ -47,7 +52,7 @@ Key benefits include:
 - **AWS Budgets Information**: Displays budget limits and actual spend
 - **EC2 Instance Status**: Detailed state information across specified/accessible regions
 - **Cost Trend Analysis**: View detailed cost trends in bar charts for the last 6 months across AWS profiles
-- **FinOps Audit**: View untagged resources, unused or stopped resources, and Budget breaches across AWS profiles. Audit reports are exported in PDF format.
+- **FinOps Audit**: View untagged resources, unused or stopped resources, and Budget breaches across AWS profiles. 
 - **Profile Management**:
   - Automatic profile detection
   - Specific profile selection with `--profiles`
@@ -57,10 +62,10 @@ Key benefits include:
 - **Export Options**:
   - CSV export with `--report-name` and `--report-type csv`
   - JSON export with `--report-name` and `--report-type json`
+  - PDF export with `--report-name` and `--report-type pdf`
   - Export to both CSV and JSON formats with `--report-name` and `--report-type csv json`
   - Specify output directory using `--dir`
-  - PDF export with `--report-name` and `--report-type pdf`
-  - **Note**: Audit reports (generated via `--audit`) currently only support PDF and JSON export. Other formats specified in `--report-type` will be ignored for these reports.
+  - **Note**: Trend reports (generated via `--trend`) currently only support JSON export. Other formats specified in `--report-type` will be ignored for these reports.
 - **Improved Error Handling**: Resilient and user-friendly error messages
 - **Beautiful Terminal UI**: Styled with the Rich library for a visually appealing experience
 
@@ -296,21 +301,6 @@ trend: false # Set to true to run trend report by default
   "trend": false /* Set to true to run trend report by default */
 }
 ```
-
-## Example Terminal Output
-
-![Dashboard](aws-finops-dashboard-v2.2.3.png)
-
-![Trend](aws-finops-dashboard_trend.png)
-
-![alt text](audit_report.png)
-
-## Example PDF Reports
-
-![alt text](audit_report_pdf.png)
-
-![alt text](cost_report_pdf.png)
-
 ---
 
 ## Export Formats
@@ -334,7 +324,6 @@ When exporting to CSV, a file is generated with the following columns:
 When exporting to JSON, a structured file is generated that includes all dashboard data in a format that's easy to parse programmatically.
 
 ### PDF Output Format (for Audit Report)
-This is the export format for reports generated using the `--audit` flag. Currently, audit reports are only exported to PDF.
 
 When exporting to PDF, a file is generated with the following columns:
 
@@ -345,25 +334,25 @@ When exporting to PDF, a file is generated with the following columns:
 - `Unused Volumes`
 - `Unused EIPs`
 - `Budget Alerts`
+
 ---
 
 ## Cost For Every Run
 
-This script makes API calls to AWS, primarily to Cost Explorer, Budgets, EC2, and STS. AWS may charge for some API calls (typically `$0.01` for each API call, check current pricing).
+This script makes API calls to AWS, primarily to Cost Explorer, Budgets, EC2, and STS. AWS may charge for Cost Explorer API calls (typically `$0.01` for each API call, check current pricing).
 
 The number of API calls depends heavily on the options used:
 
-- **Cost Explorer & Budgets:** Typically 3 `ce:GetCostAndUsage` and 1 `budgets:DescribeBudgets` call per profile processed.
-- **STS:** 1 `sts:GetCallerIdentity` call per profile processed (used for account ID).
-- **EC2:**
-  - 1 `ec2:DescribeRegions` call initially (per session).
-  - If `--regions` is **not** specified, the script attempts to check accessibility by calling `ec2:DescribeInstances` in *multiple regions*, potentially increasing API calls significantly.
-  - If `--regions` **is** specified, 1 `ec2:DescribeInstances` call is made *per specified region* (per profile, unless `--combine` is used, where it's called once per region for the primary profile).
+- **Default dashboard when `--audit` or `--trend` flags not used**: 
+  - It costs you $0.06 for one AWS Profile and $0.03 extra for each AWS profile queried.
+- **Cost Trend dashboard when `--trend` flag is used**:
+  - It costs you $0.03 for each AWS profile queried.
+- **Audit Dashboard when `--audit` flag is used**:
+  - Free
 
 **To minimize API calls and potential costs:**
 
 - Use the `--profiles` argument to specify only the profiles you need.
-- Use the `--regions` argument to limit EC2 checks to only relevant regions. This significantly reduces `ec2:DescribeInstances` calls compared to automatic region discovery.
 - Consider using the `--combine` option when working with multiple profiles from the same AWS account.
 
 The exact cost per run is usually negligible but depends on the scale of your usage and AWS pricing.
