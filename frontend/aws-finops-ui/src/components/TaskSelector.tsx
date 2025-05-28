@@ -97,11 +97,9 @@ export function TaskSelector({ onSelectTask, selectedTaskId }: TaskSelectorProps
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
           {tasks?.map((task) => (
-            <motion.div
+            <div
               key={task.id}
               onClick={() => onSelectTask(task)}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
               className={`
                 relative overflow-hidden p-5 rounded-xl cursor-pointer transition-all duration-300
                 ${selectedTaskId === task.id 
@@ -110,22 +108,28 @@ export function TaskSelector({ onSelectTask, selectedTaskId }: TaskSelectorProps
                 }
               `}
             >
-              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-indigo-600 opacity-0 transition-opacity duration-300 ease-in-out"></div>
-              
-              <div className="flex items-start space-x-4">
-                <div className={`p-3 rounded-lg bg-gradient-to-br ${getTaskGradient(task.id)} flex items-center justify-center`}>
-                  {getTaskIcon(task.id)}
+              <motion.div
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                style={{ width: '100%' }}
+              >
+                <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-indigo-600 opacity-0 transition-opacity duration-300 ease-in-out"></div>
+                
+                <div className="flex items-start space-x-4">
+                  <div className={`p-3 rounded-lg bg-gradient-to-br ${getTaskGradient(task.id)} flex items-center justify-center`}>
+                    {getTaskIcon(task.id)}
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-gray-900 dark:text-white mb-1">{task.name}</h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-300">{task.description}</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900 dark:text-white mb-1">{task.name}</h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-300">{task.description}</p>
-                </div>
-              </div>
-              
-              {selectedTaskId === task.id && (
-                <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-indigo-600"></div>
-              )}
-            </motion.div>
+                
+                {selectedTaskId === task.id && (
+                  <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-indigo-600"></div>
+                )}
+              </motion.div>
+            </div>
           ))}
         </div>
       </div>
