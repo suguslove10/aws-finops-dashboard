@@ -100,6 +100,45 @@ npm install
 cd ../..
 ```
 
+### Option 3: Docker Compose Installation
+
+You can also run the entire application using Docker Compose:
+
+```bash
+# Clone the repository
+git clone https://github.com/suguslove10/aws-finops-dashboard.git
+cd aws-finops-dashboard
+
+# Build and start the containers
+docker-compose up -d
+
+# The application will be available at:
+# - Frontend: http://localhost:3001
+# - Backend API: http://localhost:5001
+```
+
+**Note:** When using Docker, you need to configure AWS credentials using one of these methods:
+1. Mount your AWS credentials by ensuring `~/.aws` exists
+2. Add credentials through the web UI
+3. Use environment variables in the Docker Compose file
+
+#### Docker Troubleshooting
+
+If you encounter issues with the Docker setup:
+
+```bash
+# Remove existing containers
+docker-compose down
+
+# Rebuild containers without using cache
+docker-compose build --no-cache
+
+# Start services and view logs
+docker-compose up
+```
+
+If the frontend container fails to build due to ESLint errors, this is expected and the configuration has been adjusted to ignore these during the build process.
+
 ## AWS CLI Profile Setup
 
 Configure your AWS profiles with the required permissions:
