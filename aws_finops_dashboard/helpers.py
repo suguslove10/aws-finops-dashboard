@@ -585,35 +585,43 @@ def _export_enhanced_pdf(
         )
 
         styles = getSampleStyleSheet()
-        # Add custom styles
-        styles.add(ParagraphStyle(name='Title', 
-                                 fontName='Helvetica-Bold',
-                                 fontSize=18, 
-                                 spaceAfter=12,
-                                 alignment=1))  # 1 = center alignment
+        # Modify existing styles or create new ones with unique names
+        title_style = ParagraphStyle(
+            name='EnhancedTitle', 
+            fontName='Helvetica-Bold',
+            fontSize=18, 
+            spaceAfter=12,
+            alignment=1  # 1 = center alignment
+        )
         
-        styles.add(ParagraphStyle(name='Heading2', 
-                                 fontName='Helvetica-Bold',
-                                 fontSize=14, 
-                                 spaceAfter=8,
-                                 spaceBefore=12))
+        heading2_style = ParagraphStyle(
+            name='EnhancedHeading2', 
+            fontName='Helvetica-Bold',
+            fontSize=14, 
+            spaceAfter=8,
+            spaceBefore=12
+        )
         
-        styles.add(ParagraphStyle(name='SmallText', 
-                                 fontName='Helvetica',
-                                 fontSize=8))
+        small_text_style = ParagraphStyle(
+            name='EnhancedSmallText', 
+            fontName='Helvetica',
+            fontSize=8
+        )
         
-        styles.add(ParagraphStyle(name='ExecutiveSummary', 
-                                 fontName='Helvetica-Bold',
-                                 fontSize=12,
-                                 spaceAfter=10,
-                                 spaceBefore=10))
+        exec_summary_style = ParagraphStyle(
+            name='EnhancedExecutiveSummary', 
+            fontName='Helvetica-Bold',
+            fontSize=12,
+            spaceAfter=10,
+            spaceBefore=10
+        )
 
         elements = []
 
         # Add title and date
-        elements.append(Paragraph(f"AWS FinOps Dashboard ({currency})", styles["Title"]))
+        elements.append(Paragraph(f"AWS FinOps Dashboard ({currency})", title_style))
         current_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        elements.append(Paragraph(f"Report generated on: {current_time_str}", styles["SmallText"]))
+        elements.append(Paragraph(f"Report generated on: {current_time_str}", small_text_style))
         elements.append(Spacer(1, 20))
         
         # Add executive summary
@@ -641,16 +649,16 @@ def _export_enhanced_pdf(
         formatted_current = format_currency(total_current_spend, currency)
         formatted_previous = format_currency(total_previous_spend, currency)
         
-        elements.append(Paragraph("Executive Summary", styles["Heading2"]))
+        elements.append(Paragraph("Executive Summary", heading2_style))
         elements.append(Paragraph(
             f"This report summarizes AWS costs across {total_accounts} account{'s' if total_accounts > 1 else ''}. "
             f"The total spend for the current period ({current_period_dates}) is {formatted_current}, which has {change_text} "
             f"compared to the previous period ({previous_period_dates}) spend of {formatted_previous}.",
-            styles["ExecutiveSummary"]
+            exec_summary_style
         ))
         
         # Add recommendations based on data
-        elements.append(Paragraph("Key Observations & Recommendations:", styles["Heading2"]))
+        elements.append(Paragraph("Key Observations & Recommendations:", heading2_style))
         
         recommendations = []
         
@@ -681,7 +689,7 @@ def _export_enhanced_pdf(
         elements.append(Spacer(1, 20))
         
         # Add service cost distribution chart (pie chart)
-        elements.append(Paragraph("Cost Distribution by Service", styles["Heading2"]))
+        elements.append(Paragraph("Cost Distribution by Service", heading2_style))
         
         # Aggregate all services across profiles
         all_services = {}
@@ -731,7 +739,7 @@ def _export_enhanced_pdf(
         
         # Add month-to-month comparison bar chart if we have previous period data
         if total_previous_spend > 0:
-            elements.append(Paragraph("Period Cost Comparison", styles["Heading2"]))
+            elements.append(Paragraph("Period Cost Comparison", heading2_style))
             
             drawing = Drawing(400, 200)
             bc = VerticalBarChart()
@@ -759,7 +767,7 @@ def _export_enhanced_pdf(
         elements.append(PageBreak())
         
         # Create the table headers for the detailed data
-        elements.append(Paragraph("Detailed Cost Data", styles["Heading2"]))
+        elements.append(Paragraph("Detailed Cost Data", heading2_style))
         table_headers = [
             "Profile",
             "Account ID",
@@ -855,7 +863,7 @@ def _export_enhanced_pdf(
         # Add footer
         elements.append(Paragraph(
             f"Report generated with AWS FinOps Dashboard on {current_time_str}",
-            styles["SmallText"]
+            small_text_style
         ))
 
         # Build the document
