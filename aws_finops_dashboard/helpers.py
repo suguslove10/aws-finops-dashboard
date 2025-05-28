@@ -480,7 +480,7 @@ def _export_standard_pdf(
             # Format EC2 instance summary
             ec2_data_summary = "\n".join(
                 [
-                    f"{state}: {count}"
+                    f"{state.capitalize()}: {count}"
                     for state, count in row["ec2_summary"].items()
                     if count > 0
                 ]
@@ -579,9 +579,14 @@ def _export_enhanced_pdf(
 
         file_path = os.path.join(output_dir, f"{filename}.pdf")
 
-        # Set up the document with A4 portrait for better charts
+        # Set up the document with landscape A4 for better table fit
         doc = SimpleDocTemplate(
-            file_path, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30
+            file_path, 
+            pagesize=landscape(A4), 
+            rightMargin=36, 
+            leftMargin=36, 
+            topMargin=36, 
+            bottomMargin=36
         )
 
         styles = getSampleStyleSheet()
@@ -707,14 +712,16 @@ def _export_enhanced_pdf(
         
         # Create pie chart
         if top_services:
-            drawing = Drawing(400, 200)
+            drawing = Drawing(500, 300)  # Increase drawing size
             pie = Pie()
-            pie.x = 150
+            pie.x = 100                 # Move pie chart to the left
             pie.y = 50
-            pie.width = 100
-            pie.height = 100
+            pie.width = 150             # Make pie chart bigger
+            pie.height = 150            # Make pie chart bigger
             pie.data = [cost for _, cost in top_services]
-            pie.labels = [service for service, _ in top_services]
+            
+            # Shorter service names for labels
+            pie.labels = [(service[:15] + '...' if len(service) > 15 else service) for service, _ in top_services]
             pie.slices.strokeWidth = 0.5
             
             # Add different colors for pie slices
@@ -725,28 +732,37 @@ def _export_enhanced_pdf(
             
             drawing.add(pie)
             
-            # Add legend
+            # Add legend with better positioning
             legend = Legend()
             legend.alignment = 'right'
-            legend.x = 280
+            legend.x = 300              # Position further right
             legend.y = 150
-            legend.colorNamePairs = [(pie_colors[i], (service[:20] + '...' if len(service) > 20 else service)) 
-                                    for i, (service, _) in enumerate(top_services)]
+            legend.columnMaximum = 5    # Maximum 5 items per column
+            legend.dxTextSpace = 5      # Less space between color box and text
+            
+            # Truncate long service names
+            colorNamePairs = []
+            for i, (service, _) in enumerate(top_services):
+                if len(service) > 25:
+                    service = service[:25] + '...'
+                colorNamePairs.append((pie_colors[i], service))
+                
+            legend.colorNamePairs = colorNamePairs
             drawing.add(legend)
             
             elements.append(drawing)
-            elements.append(Spacer(1, 10))
+            elements.append(Spacer(1, 20))  # Add more space after the chart
         
         # Add month-to-month comparison bar chart if we have previous period data
         if total_previous_spend > 0:
             elements.append(Paragraph("Period Cost Comparison", heading2_style))
             
-            drawing = Drawing(400, 200)
+            drawing = Drawing(450, 250)  # Increase drawing size
             bc = VerticalBarChart()
             bc.x = 50
             bc.y = 50
-            bc.height = 125
-            bc.width = 300
+            bc.height = 150            # Increase chart height
+            bc.width = 350             # Increase chart width
             bc.data = [[total_previous_spend, total_current_spend]]
             bc.bars[0].fillColor = colors.steelblue
             
@@ -761,7 +777,7 @@ def _export_enhanced_pdf(
             
             drawing.add(bc)
             elements.append(drawing)
-            elements.append(Spacer(1, 20))
+            elements.append(Spacer(1, 30))  # Add more space after the chart
         
         # Add page break before detailed table
         elements.append(PageBreak())
@@ -771,11 +787,11 @@ def _export_enhanced_pdf(
         table_headers = [
             "Profile",
             "Account ID",
-            f"Previous Period\n({previous_period_dates})",
-            f"Current Period\n({current_period_dates})",
+            f"Previous\nPeriod\n({previous_period_dates.split(' to ')[0]})",
+            f"Current\nPeriod\n({current_period_dates.split(' to ')[0]})",
             "Services",
             "Budgets",
-            "EC2 Instances",
+            "EC2\nInstances",
         ]
 
         table_data = [table_headers]
@@ -785,45 +801,68 @@ def _export_enhanced_pdf(
             current_month_value = convert_currency(row['current_month'], "USD", currency)
             last_month_value = convert_currency(row['last_month'], "USD", currency)
             
-            # Format service costs
+            # Format service costs - limit number of services shown to prevent overflow
             services_data = []
-            for service, cost in row["service_costs"]:
+            for service, cost in row["service_costs"][:10]:  # Limit to top 10 services
                 converted_cost = convert_currency(cost, "USD", currency)
                 formatted_cost = format_currency(converted_cost, currency)
+                # Truncate long service names
+                if len(service) > 30:
+                    service = service[:30] + "..."
                 services_data.append(f"{service}: {formatted_cost}")
             
+            if len(row["service_costs"]) > 10:
+                services_data.append("...")
+                
             services_text = "\n".join(services_data) if services_data else "No costs"
             
-            # Format budget info
+            # Format budget info - limit to most important items
             budgets_data = []
+            budget_count = 0
             for budget_item in row["budget_info"]:
+                if budget_count >= 5:  # Limit to 5 budget items
+                    budgets_data.append("...")
+                    break
+                    
                 if " limit: $" in budget_item:
                     budget_name, limit_str = budget_item.split(" limit: $")
+                    if len(budget_name) > 15:  # Truncate long budget names
+                        budget_name = budget_name[:15] + "..."
                     limit_value = float(limit_str)
                     converted_limit = convert_currency(limit_value, "USD", currency)
                     formatted_limit = format_currency(converted_limit, currency)
                     budgets_data.append(f"{budget_name} limit: {formatted_limit}")
+                    budget_count += 1
                 elif " actual: $" in budget_item:
                     budget_name, actual_str = budget_item.split(" actual: $")
+                    if len(budget_name) > 15:  # Truncate long budget names
+                        budget_name = budget_name[:15] + "..."
                     actual_value = float(actual_str)
                     converted_actual = convert_currency(actual_value, "USD", currency)
                     formatted_actual = format_currency(converted_actual, currency)
                     budgets_data.append(f"{budget_name} actual: {formatted_actual}")
+                    budget_count += 1
                 elif " forecast: $" in budget_item:
                     budget_name, forecast_str = budget_item.split(" forecast: $")
+                    if len(budget_name) > 15:  # Truncate long budget names
+                        budget_name = budget_name[:15] + "..."
                     forecast_value = float(forecast_str)
                     converted_forecast = convert_currency(forecast_value, "USD", currency)
                     formatted_forecast = format_currency(converted_forecast, currency)
                     budgets_data.append(f"{budget_name} forecast: {formatted_forecast}")
+                    budget_count += 1
                 else:
+                    if len(budget_item) > 30:  # Truncate long items
+                        budget_item = budget_item[:30] + "..."
                     budgets_data.append(budget_item)
+                    budget_count += 1
                     
             budgets_text = "\n".join(budgets_data) if budgets_data else "No budgets"
             
             # Format EC2 instance summary
             ec2_data_summary = "\n".join(
                 [
-                    f"{state}: {count}"
+                    f"{state.capitalize()}: {count}"
                     for state, count in row["ec2_summary"].items()
                     if count > 0
                 ]
@@ -841,18 +880,22 @@ def _export_enhanced_pdf(
                 ]
             )
 
-        table = Table(table_data, repeatRows=1)
+        # Define column widths as percentages of the available width
+        col_widths = [100, 100, 80, 80, 220, 170, 80]
+        table = Table(table_data, repeatRows=1, colWidths=col_widths)
         table.setStyle(
             TableStyle(
                 [
                     ("BACKGROUND", (0, 0), (-1, 0), colors.steelblue),
                     ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
                     ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
-                    ("FONTSIZE", (0, 0), (-1, -1), 8),
+                    ("FONTSIZE", (0, 0), (-1, 0), 8),  # Header font size
+                    ("FONTSIZE", (0, 1), (-1, -1), 7),  # Data font size (smaller)
                     ("ALIGN", (0, 0), (-1, -1), "LEFT"),
                     ("VALIGN", (0, 0), (-1, -1), "TOP"),
                     ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
                     ("BACKGROUND", (0, 1), (-1, -1), colors.whitesmoke),
+                    ("WORDWRAP", (0, 0), (-1, -1), True),  # Enable word wrapping
                 ]
             )
         )
