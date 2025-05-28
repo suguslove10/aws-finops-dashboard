@@ -168,7 +168,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--currency",
-        "-c",
+        "-u",
         choices=["USD", "INR", "EUR", "GBP", "JPY", "AUD", "CAD", "CNY"],
         help="Currency to display costs in (default: USD)",
         type=str,

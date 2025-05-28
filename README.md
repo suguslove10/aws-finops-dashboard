@@ -183,7 +183,7 @@ aws-finops [options]
 | `--cpu-threshold` | CPU utilization threshold for EC2 right-sizing recommendations (percent, default: 40.0). |
 | `--skip-ri-analysis` | Skip Reserved Instance analysis when generating optimization recommendations. |
 | `--skip-savings-plans` | Skip Savings Plans analysis when generating optimization recommendations. |
-| `--currency`, `-c` | Currency to display costs in (choices: USD, INR, EUR, GBP, JPY, AUD, CAD, CNY, default: USD). |
+| `--currency`, `-u` | Currency to display costs in (choices: USD, INR, EUR, GBP, JPY, AUD, CAD, CNY, default: USD). |
 | `--enhanced-pdf` | Generate enhanced PDF reports with visualizations and executive summary. |
 
 ### Examples
@@ -258,10 +258,10 @@ aws-finops --profiles dev prod --optimize --cpu-threshold 30.0
 aws-finops --all --optimize --skip-ri-analysis
 
 # Display costs in Indian Rupees (INR)
-aws-finops --profiles dev prod --currency INR
+aws-finops --profiles dev prod -u INR
 
 # Generate PDF report with costs in Euros
-aws-finops --all --report-name aws_costs_eur --report-type pdf --currency EUR
+aws-finops --all --report-name aws_costs_eur --report-type pdf -u EUR
 
 # Generate enhanced PDF report with visualizations and executive summary
 aws-finops --all --report-name enhanced_report --report-type pdf --enhanced-pdf
