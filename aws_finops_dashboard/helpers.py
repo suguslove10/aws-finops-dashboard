@@ -409,7 +409,7 @@ def _export_standard_pdf(
     try:
         if not output_dir:
             output_dir = os.getcwd()
-        os.makedirs(output_dir, exist_ok=True)
+            os.makedirs(output_dir, exist_ok=True)
 
         file_path = os.path.join(output_dir, f"{filename}.pdf")
 

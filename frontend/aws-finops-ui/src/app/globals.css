@@ -1,0 +1,507 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --card-background: #ffffff;
+  --card-foreground: #0f172a;
+  --input-background: #ffffff;
+  --input-foreground: #0f172a;
+  --primary: #0369a1;
+  --primary-hover: #0284c7;
+  --primary-foreground: #ffffff;
+  --border: #e2e8f0;
+  --ring: #64748b;
+  --focus-ring: rgba(59, 130, 246, 0.5);
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-default: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  --gradient-primary: linear-gradient(to right, #3b82f6, #4f46e5);
+  
+  /* Theme variables */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0f172a;
+    --foreground: #f1f5f9;
+    --card-background: #1e293b;
+    --card-foreground: #f1f5f9;
+    --input-background: #1e293b;
+    --input-foreground: #f1f5f9;
+    --primary: #0ea5e9;
+    --primary-hover: #38bdf8;
+    --primary-foreground: #f1f5f9;
+    --border: #334155;
+    --ring: #94a3b8;
+    --focus-ring: rgba(59, 130, 246, 0.5);
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.2);
+    --gradient-primary: linear-gradient(to right, #3b82f6, #6366f1);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideInUp {
+  from { 
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to { 
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes glow {
+  0%, 100% { box-shadow: 0 0 5px 1px var(--focus-ring); }
+  50% { box-shadow: 0 0 15px 2px var(--focus-ring); }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Base styles */
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  transition: background-color 0.3s ease, color 0.3s ease;
+  min-height: 100vh;
+}
+
+::selection {
+  background-color: var(--primary);
+  color: var(--primary-foreground);
+}
+
+/* Text styling for forms and cards */
+h1, h2, h3, h4, h5, h6 {
+  color: var(--foreground);
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+p, span, label {
+  color: var(--foreground);
+  line-height: 1.5;
+}
+
+a {
+  transition: color var(--transition-fast);
+}
+
+/* Card styling */
+.bg-white, .bg-gray-50 {
+  background-color: var(--card-background) !important;
+  color: var(--card-foreground) !important;
+  transition: background-color 0.3s ease, color 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+/* Input styling */
+input, select, textarea {
+  background-color: var(--input-background) !important;
+  color: var(--input-foreground) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.75rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+input[type="checkbox"] {
+  border-radius: 0.25rem;
+  width: 1rem;
+  height: 1rem;
+  cursor: pointer;
+}
+
+input[type="checkbox"]:checked {
+  background-color: var(--primary) !important;
+  border-color: var(--primary) !important;
+}
+
+button, .tr-Button {
+  background-color: var(--primary) !important;
+  color: var(--primary-foreground) !important;
+  font-weight: 500;
+  border-radius: var(--radius-sm);
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+button:hover, .tr-Button:hover {
+  background-color: var(--primary-hover) !important;
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+button:active, .tr-Button:active {
+  transform: translateY(0);
+}
+
+button:focus, .tr-Button:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+button:disabled, .tr-Button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* Card enhancements */
+.tr-Card {
+  border-radius: var(--radius-md) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: var(--shadow-md) !important;
+  transition: box-shadow 0.3s ease, transform 0.3s ease;
+  overflow: hidden;
+  animation: fadeIn 0.5s ease-out;
+}
+
+.tr-Card:hover {
+  box-shadow: var(--shadow-lg) !important;
+}
+
+/* Terminal output styling */
+.terminal-output {
+  background-color: #1e1e1e;
+  color: #f1f1f1;
+  font-family: var(--font-mono);
+  padding: 1rem;
+  border-radius: var(--radius-sm);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-x: auto;
+  box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.2);
+}
+
+.terminal-output::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.terminal-output::-webkit-scrollbar-track {
+  background: #2d2d2d;
+  border-radius: 4px;
+}
+
+.terminal-output::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 4px;
+}
+
+.terminal-output::-webkit-scrollbar-thumb:hover {
+  background: #777;
+}
+
+/* Fix for malformed HTML tags that might be in the output */
+.terminal-output span[style] {
+  display: inline;
+}
+
+/* Remove any nested styles that could break the layout */
+.terminal-output span span {
+  display: inline;
+}
+
+/* AWS CLI Table styling */
+.aws-cli-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+  font-size: 0.875rem;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  table-layout: fixed;
+}
+
+.aws-cli-table th {
+  background-color: #2d2d2d;
+  color: #ffffff;
+  text-align: left;
+  padding: 0.75rem;
+  border: 1px solid #444;
+  font-weight: 600;
+}
+
+.aws-cli-table td {
+  padding: 0.75rem;
+  border: 1px solid #444;
+  color: #e0e0e0;
+  word-break: break-word;
+}
+
+.aws-cli-table tr:nth-child(even) {
+  background-color: #252525;
+}
+
+.aws-cli-table tr:hover {
+  background-color: #333;
+}
+
+/* Terminal colors and formatting */
+.terminal-output .text-success, 
+.terminal-output span[style*="color: #a8c023"],
+.terminal-output span[style*="color:#a8c023"] { 
+  color: #a8c023 !important; 
+}
+
+.terminal-output .text-danger,
+.terminal-output span[style*="color: #ff6b68"],
+.terminal-output span[style*="color:#ff6b68"] { 
+  color: #ff6b68 !important; 
+}
+
+.terminal-output .text-warning,
+.terminal-output span[style*="color: #d6bf55"],
+.terminal-output span[style*="color:#d6bf55"] { 
+  color: #d6bf55 !important; 
+}
+
+.terminal-output .text-info,
+.terminal-output span[style*="color: #299999"],
+.terminal-output span[style*="color:#299999"] { 
+  color: #299999 !important; 
+}
+
+.terminal-output .text-primary,
+.terminal-output span[style*="color: #5394ec"],
+.terminal-output span[style*="color:#5394ec"] { 
+  color: #5394ec !important; 
+}
+
+/* AWS ASCII-art tables in the terminal */
+.terminal-output pre {
+  white-space: pre;
+  overflow-x: auto;
+  margin: 0.5rem 0;
+}
+
+/* Format HTML within the output */
+.terminal-output table:not(.aws-cli-table) {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1rem 0;
+}
+
+.terminal-output table:not(.aws-cli-table) th,
+.terminal-output table:not(.aws-cli-table) td {
+  border: 1px solid #444;
+  padding: 0.5rem;
+  text-align: left;
+}
+
+.terminal-output table:not(.aws-cli-table) th {
+  background-color: #2d2d2d;
+}
+
+.terminal-output table:not(.aws-cli-table) tr:nth-child(even) {
+  background-color: #252525;
+}
+
+/* Terminal colors */
+.text-success { color: #a8c023 !important; }
+.text-danger { color: #ff6b68 !important; }
+.text-warning { color: #d6bf55 !important; }
+.text-info { color: #299999 !important; }
+.text-primary { color: #5394ec !important; }
+.text-gray-500 { color: #6c757d !important; }
+.text-gray-700 { color: #495057 !important; }
+
+/* Badge styling */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+  vertical-align: baseline;
+  border-radius: 9999px;
+  transition: all 0.2s ease;
+}
+
+.bg-success { background-color: #10b981 !important; color: white !important; }
+.bg-danger { background-color: #ef4444 !important; color: white !important; }
+.bg-warning { background-color: #f59e0b !important; color: white !important; }
+.bg-info { background-color: #0ea5e9 !important; color: white !important; }
+.bg-primary { background-color: #3b82f6 !important; color: white !important; }
+.bg-secondary { background-color: #6b7280 !important; color: white !important; }
+
+/* Task cards */
+.task-card {
+  transition: all 0.3s ease;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  position: relative;
+  overflow: hidden;
+}
+
+.task-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lg);
+}
+
+.task-card.selected {
+  border-color: var(--primary);
+  background-color: rgba(3, 105, 161, 0.05);
+}
+
+.task-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--gradient-primary);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.3s ease;
+}
+
+.task-card:hover::before,
+.task-card.selected::before {
+  transform: scaleX(1);
+}
+
+/* Animated elements */
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.5s ease-out;
+}
+
+.animate-slide-up {
+  animation: slideInUp 0.5s ease-out;
+}
+
+.animate-glow {
+  animation: glow 2s ease-in-out infinite;
+}
+
+/* Focus visible outline for accessibility */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Terminal adjustments */
+.terminal-container .xterm {
+  padding: 0 !important;
+  width: 100% !important;
+}
+
+.terminal-container .xterm-viewport {
+  padding-left: 0 !important;
+  width: 100% !important;
+  overflow-x: auto !important;
+}
+
+.terminal-container .xterm-screen {
+  margin-left: 0 !important;
+  width: 100% !important;
+}
+
+/* Fix rows centering */
+.terminal-container .xterm-rows {
+  margin-left: 0 !important;
+  width: 100% !important;
+}
+
+/* Adjust character width for better visibility */
+.terminal-container .xterm-rows span {
+  font-variant-ligatures: none !important;
+  letter-spacing: 0 !important;
+  white-space: pre !important;
+}
+
+/* Apply monospace font consistently */
+.terminal-container * {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+}
+
+/* Ensure horizontal scrolling works properly */
+.terminal-container canvas {
+  display: block;
+  width: auto !important;
+  min-width: 100%;
+}
+
+/* Custom scrollbars for xterm */
+.terminal-container .xterm-viewport::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.terminal-container .xterm-viewport::-webkit-scrollbar-track {
+  background: #2d2d2d;
+  border-radius: 4px;
+}
+
+.terminal-container .xterm-viewport::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 4px;
+}
+
+.terminal-container .xterm-viewport::-webkit-scrollbar-thumb:hover {
+  background: #777;
+}
+
+/* Terminal output container - for when not using xterm.js */
+.terminal-output-container {
+  background-color: #1e1e1e;
+  color: #f1f1f1;
+  font-family: var(--font-mono);
+  padding: 1rem;
+  border-radius: var(--radius-sm);
+  line-height: 1.5;
+  white-space: pre;
+  overflow-x: auto;
+  width: 100%;
+  max-width: 100%;
+}

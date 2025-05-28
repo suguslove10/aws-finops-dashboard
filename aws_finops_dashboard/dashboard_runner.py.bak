@@ -479,9 +479,9 @@ def _export_dashboard_reports(
     if "csv" in args.report_type:
         csv_path = export_cost_dashboard_to_csv(
             export_data, args.report_name, args.dir
-        )
-        if csv_path:
-            console.print(
+            )
+                if csv_path:
+                    console.print(
                 f"[bright_green]Report exported to CSV: {csv_path}[/]"
             )
 
@@ -489,23 +489,23 @@ def _export_dashboard_reports(
         json_path = export_cost_dashboard_to_json(
             export_data, args.report_name, args.dir
         )
-        if json_path:
-            console.print(
+                if json_path:
+                    console.print(
                 f"[bright_green]Report exported to JSON: {json_path}[/]"
-            )
+                    )
 
     if "pdf" in args.report_type:
-        pdf_path = export_cost_dashboard_to_pdf(
-            export_data,
-            args.report_name,
-            args.dir,
+                pdf_path = export_cost_dashboard_to_pdf(
+                    export_data,
+                    args.report_name,
+                    args.dir,
             previous_period_dates,
             current_period_dates,
             args.currency,
             args.enhanced_pdf,
-        )
-        if pdf_path:
-            console.print(
+                )
+                if pdf_path:
+                    console.print(
                 f"[bright_green]Report exported to PDF: {pdf_path}[/]"
             )
 

@@ -1,10 +1,13 @@
 from collections import defaultdict
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 
 import boto3
 from boto3.session import Session
 from botocore.exceptions import ClientError
+import botocore.exceptions
 from rich.console import Console
+import os
+import configparser
 
 from aws_finops_dashboard.types import BudgetInfo, EC2Summary, RegionName
 
@@ -12,13 +15,164 @@ console = Console()
 
 
 def get_aws_profiles() -> List[str]:
-    """Get all configured AWS profiles from the AWS CLI configuration."""
+    """Get all available AWS profiles from AWS config and credentials files."""
+    profiles = []
+    
+    # Check for AWS credentials file
+    credentials_path = os.path.expanduser("~/.aws/credentials")
+    if os.path.exists(credentials_path):
+        config = configparser.ConfigParser()
+        config.read(credentials_path)
+        # Add all sections except 'default' as 'profile_name'
+        profiles.extend([section for section in config.sections() if section != 'default'])
+        # Add 'default' if it exists
+        if 'default' in config:
+            profiles.append('default')
+    
+    # Check for AWS config file for additional profiles
+    config_path = os.path.expanduser("~/.aws/config")
+    if os.path.exists(config_path):
+        config = configparser.ConfigParser()
+        config.read(config_path)
+        # AWS config uses 'profile profile_name' for non-default profiles
+        profiles.extend([
+            section.replace('profile ', '') 
+            for section in config.sections() 
+            if section.startswith('profile ') and section.replace('profile ', '') not in profiles
+        ])
+        # Add 'default' if it exists and not already added
+        if 'default' in config.sections() and 'default' not in profiles:
+            profiles.append('default')
+    
+    return sorted(profiles)
+
+
+def get_aws_profiles_with_details() -> List[Dict[str, Any]]:
+    """Get all available AWS profiles with account info and status."""
+    profiles = get_aws_profiles()
+    profiles_with_details = []
+    
+    for profile_name in profiles:
+        try:
+            # Create a session for this profile
+            session = boto3.Session(profile_name=profile_name)
+            sts_client = session.client('sts')
+            
+            # Get account info
+            caller_identity = sts_client.get_caller_identity()
+            account_id = caller_identity['Account']
+            username = caller_identity['Arn'].split('/')[-1]
+            
+            # Get regions where this profile has access
+            ec2_client = session.client('ec2', region_name='us-east-1')
+            regions = [region['RegionName'] for region in ec2_client.describe_regions()['Regions']]
+            
+            profiles_with_details.append({
+                "name": profile_name,
+                "account_id": account_id,
+                "username": username,
+                "status": "active",
+                "regions": regions
+            })
+        except botocore.exceptions.ClientError as e:
+            # Handle specific errors
+            if 'AccessDenied' in str(e):
+                profiles_with_details.append({
+                    "name": profile_name,
+                    "status": "access_denied",
+                    "error": "Access denied. Check permissions."
+                })
+            elif 'ExpiredToken' in str(e):
+                profiles_with_details.append({
+                    "name": profile_name,
+                    "status": "expired",
+                    "error": "Credentials expired. Please refresh."
+                })
+            else:
+                profiles_with_details.append({
+                    "name": profile_name,
+                    "status": "error",
+                    "error": str(e)
+                })
+        except Exception as e:
+            # Handle general errors
+            profiles_with_details.append({
+                "name": profile_name,
+                "status": "error",
+                "error": str(e)
+            })
+    
+    return profiles_with_details
+
+
+def validate_aws_profile(profile_name: str) -> Dict[str, Any]:
+    """Validate an AWS profile and return its details."""
     try:
-        session = boto3.Session()
-        return session.available_profiles
+        # Create a session for this profile
+        session = boto3.Session(profile_name=profile_name)
+        sts_client = session.client('sts')
+        
+        # Get account info
+        caller_identity = sts_client.get_caller_identity()
+        account_id = caller_identity['Account']
+        username = caller_identity['Arn'].split('/')[-1]
+        
+        return {
+            "name": profile_name,
+            "account_id": account_id,
+            "username": username,
+            "status": "active",
+            "is_valid": True
+        }
     except Exception as e:
-        console.print(f"[bold red]Error getting AWS profiles: {str(e)}[/]")
-        return []
+        return {
+            "name": profile_name,
+            "status": "error",
+            "error": str(e),
+            "is_valid": False
+        }
+
+
+def get_account_details(profile_name: str) -> Optional[Dict[str, Any]]:
+    """Get detailed information about an AWS account."""
+    try:
+        session = boto3.Session(profile_name=profile_name)
+        sts_client = session.client('sts')
+        account_id = sts_client.get_caller_identity()['Account']
+        
+        # Get account aliases if available
+        iam_client = session.client('iam')
+        aliases = iam_client.list_account_aliases()
+        account_alias = aliases['AccountAliases'][0] if aliases['AccountAliases'] else None
+        
+        # Get account metadata
+        organizations_client = None
+        try:
+            organizations_client = session.client('organizations')
+            account = organizations_client.describe_account(AccountId=account_id)
+            account_details = account['Account']
+        except Exception:
+            # If organizations access isn't available, just use basic info
+            account_details = {
+                'Id': account_id,
+                'Name': account_alias or f"Account {account_id}"
+            }
+        
+        # Get available regions
+        ec2_client = session.client('ec2', region_name='us-east-1')
+        regions = [region['RegionName'] for region in ec2_client.describe_regions()['Regions']]
+        
+        return {
+            "account_id": account_id,
+            "account_name": account_details.get('Name', account_alias or f"Account {account_id}"),
+            "email": account_details.get('Email'),
+            "alias": account_alias,
+            "regions": regions,
+            "profile_name": profile_name
+        }
+    except Exception as e:
+        print(f"Error getting account details for profile {profile_name}: {str(e)}")
+        return None
 
 
 def get_account_id(session: Session) -> Optional[str]:

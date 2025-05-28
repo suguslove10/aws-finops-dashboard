@@ -11,6 +11,8 @@ from aws_finops_dashboard.helpers import load_config_file
 from aws_finops_dashboard.dashboard_runner import run_dashboard
 from aws_finops_dashboard.ri_optimizer import RIOptimizer
 from aws_finops_dashboard.aws_client import get_aws_profiles
+from aws_finops_dashboard.resource_analyzer import UnusedResourceAnalyzer, analyze_unused_resources
+from aws_finops_dashboard.resource_analyzer_export import export_unused_resources
 
 console = Console()
 
@@ -208,6 +210,20 @@ def main() -> int:
         default=30,
         help="Number of days to analyze for RI recommendations (default: 30)",
     )
+    
+    # Add unused resource analyzer arguments
+    parser.add_argument(
+        "--resource-analyzer",
+        action="store_true",
+        help="Find and report on unused AWS resources",
+    )
+    parser.add_argument(
+        "--resource-types",
+        nargs="+",
+        choices=["ec2", "ebs", "eip", "all"],
+        default=["all"],
+        help="Resource types to analyze (default: all)",
+    )
 
     args = parser.parse_args()
 
@@ -226,6 +242,11 @@ def main() -> int:
     # Handle RI optimizer command specifically
     if args.ri_optimizer:
         run_ri_optimizer(args)
+        return 0
+        
+    # Handle resource analyzer command
+    if args.resource_analyzer:
+        run_resource_analyzer(args)
         return 0
 
     result = run_dashboard(args)
@@ -294,6 +315,63 @@ def run_ri_optimizer(args):
         
     console.print("\n[bright_green]Analysis complete![/]")
     console.print("[yellow]Note: These recommendations are based on historical usage patterns. Review carefully before purchasing.[/]")
+
+
+def run_resource_analyzer(args):
+    """Run the unused resource analyzer with the given arguments."""
+    # Get AWS session based on arguments
+    profiles = []
+
+    if args.profiles:
+        profiles = args.profiles
+    elif args.all:
+        profiles = get_aws_profiles()
+    else:
+        default_profile = "default"
+        if default_profile in get_aws_profiles():
+            profiles = [default_profile]
+        else:
+            profiles = get_aws_profiles()
+
+    if not profiles:
+        console.print("[bold red]No AWS profiles found. Please configure AWS CLI first.[/]")
+        sys.exit(1)
+    
+    console.print("[bold cyan]===== AWS Unused Resource Analyzer =====[/]\n")
+    console.print("[bright_blue]Analyzing resources to find unused or underutilized items...[/]\n")
+
+    for profile in profiles:
+        try:
+            console.print(f"[cyan]Analyzing profile: [bold]{profile}[/bold][/]")
+            
+            # Create AWS session
+            session = boto3.Session(profile_name=profile)
+            
+            # Create and run the analyzer
+            analyzer = UnusedResourceAnalyzer(session, args.lookback_days or 14)
+            
+            # Display results on console
+            analyzer.display_unused_resources(args.regions)
+            
+            # Export results if report type and name are specified
+            if args.report_type and args.report_name:
+                report_data = analyzer.get_all_unused_resources(args.regions)
+                
+                for report_type in args.report_type:
+                    output_file = export_unused_resources(
+                        report_data,
+                        output_format=report_type,
+                        output_dir=args.dir,
+                        report_name=f"{args.report_name}_unused_resources_{profile}"
+                    )
+                    console.print(f"[green]Report exported to: [bold]{output_file}[/bold][/]")
+                
+        except Exception as e:
+            console.print(f"[bold red]Error analyzing profile {profile}: {str(e)}[/]")
+            import traceback
+            console.print(traceback.format_exc())
+            
+    console.print("\n[bold green]Resource analysis complete![/]")
 
 
 if __name__ == "__main__":
