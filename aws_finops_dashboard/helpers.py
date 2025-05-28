@@ -425,8 +425,8 @@ def _export_standard_pdf(
         table_headers = [
             "Profile",
             "Account ID",
-            f"Previous Period\n({previous_period_dates})",
-            f"Current Period\n({current_period_dates})",
+            f"Previous Period\n({currency})",
+            f"Current Period\n({currency})",
             "Services",
             "Budgets",
             "EC2 Instances",
@@ -655,11 +655,19 @@ def _export_enhanced_pdf(
         formatted_previous = format_currency(total_previous_spend, currency)
         
         elements.append(Paragraph("Executive Summary", heading2_style))
+        summary_style = ParagraphStyle(
+            name='EnhancedSummary', 
+            parent=styles["Normal"],
+            fontSize=10,
+            leading=14,
+            spaceAfter=6
+        )
+        
         elements.append(Paragraph(
             f"This report summarizes AWS costs across {total_accounts} account{'s' if total_accounts > 1 else ''}. "
-            f"The total spend for the current period ({current_period_dates}) is {formatted_current}, which has {change_text} "
-            f"compared to the previous period ({previous_period_dates}) spend of {formatted_previous}.",
-            exec_summary_style
+            f"The total spend for the current period ({current_period_dates}) is {formatted_current} ({currency}), which has {change_text} "
+            f"compared to the previous period ({previous_period_dates}) spend of {formatted_previous} ({currency}).",
+            summary_style
         ))
         
         # Add recommendations based on data
@@ -714,38 +722,77 @@ def _export_enhanced_pdf(
         if top_services:
             drawing = Drawing(500, 300)  # Increase drawing size
             pie = Pie()
-            pie.x = 100                 # Move pie chart to the left
-            pie.y = 50
-            pie.width = 150             # Make pie chart bigger
-            pie.height = 150            # Make pie chart bigger
-            pie.data = [cost for _, cost in top_services]
+            pie.x = 125                 # Adjust position
+            pie.y = 75                  # Increase height position
+            pie.width = 130             # Slightly smaller
+            pie.height = 130            # Slightly smaller
             
-            # Shorter service names for labels
-            pie.labels = [(service[:15] + '...' if len(service) > 15 else service) for service, _ in top_services]
+            # Only include top 7 services in pie chart to avoid overcrowding
+            num_services_to_show = min(7, len(top_services))
+            top_n_services = top_services[:num_services_to_show]
+            
+            # If there are more services, combine the rest into "Other"
+            if len(top_services) > num_services_to_show:
+                other_total = sum(cost for _, cost in top_services[num_services_to_show:])
+                pie_data = [cost for _, cost in top_n_services] + [other_total]
+                top_n_services_with_other = top_n_services + [("Other Services", other_total)]
+            else:
+                pie_data = [cost for _, cost in top_n_services]
+                top_n_services_with_other = top_n_services
+                
+            pie.data = pie_data
+            
+            # Don't show labels on the pie itself
+            pie.labels = None
             pie.slices.strokeWidth = 0.5
             
             # Add different colors for pie slices
             pie_colors = [colors.red, colors.green, colors.blue, colors.yellow, colors.cyan, 
                     colors.magenta, colors.pink, colors.lavender, colors.orange, colors.purple]
-            for i, color in enumerate(pie_colors[:len(top_services)]):
-                pie.slices[i].fillColor = color
+                    
+            for i in range(len(pie_data)):
+                pie.slices[i].fillColor = pie_colors[i % len(pie_colors)]
             
             drawing.add(pie)
             
-            # Add legend with better positioning
+            # Add legend with better positioning and formatting
             legend = Legend()
             legend.alignment = 'right'
-            legend.x = 300              # Position further right
-            legend.y = 150
-            legend.columnMaximum = 5    # Maximum 5 items per column
+            legend.x = 275              # Position further right
+            legend.y = 130              # Adjust vertical position
+            legend.columnMaximum = 4    # Maximum 4 items per column for better spacing
             legend.dxTextSpace = 5      # Less space between color box and text
+            legend.dx = 10              # Space between columns
+            legend.dy = 12              # Space between rows
+            legend.fontName = 'Helvetica'
+            legend.fontSize = 7         # Smaller font size
             
-            # Truncate long service names
+            # Truncate long service names more aggressively
             colorNamePairs = []
-            for i, (service, _) in enumerate(top_services):
-                if len(service) > 25:
-                    service = service[:25] + '...'
-                colorNamePairs.append((pie_colors[i], service))
+            for i, (service, cost) in enumerate(top_n_services_with_other):
+                if i == len(top_n_services_with_other) - 1 and service == "Other Services":
+                    # Highlight "Other" differently
+                    service_name = "Other Services"
+                else:
+                    # Very short names for services to fit in legend
+                    service_name = service
+                    if len(service_name) > 18:
+                        # Try to extract meaningful parts of AWS service names
+                        if "Amazon" in service_name:
+                            service_name = service_name.replace("Amazon ", "")
+                        if "Elastic" in service_name and len(service_name) > 15:
+                            service_name = service_name.replace("Elastic ", "E.")
+                        if "Compute Cloud" in service_name:
+                            service_name = service_name.replace("Compute Cloud", "EC2")
+                        if len(service_name) > 18:
+                            service_name = service_name[:16] + "..."
+                
+                # Add percentage to each service
+                percentage = (cost / sum(pie_data)) * 100
+                if percentage >= 1:  # Only show percentage if it's at least 1%
+                    service_name = f"{service_name} ({percentage:.1f}%)"
+                
+                colorNamePairs.append((pie_colors[i % len(pie_colors)], service_name))
                 
             legend.colorNamePairs = colorNamePairs
             drawing.add(legend)
@@ -753,25 +800,56 @@ def _export_enhanced_pdf(
             elements.append(drawing)
             elements.append(Spacer(1, 20))  # Add more space after the chart
         
+        # Add text that summarizes the overall spending
+        elements.append(Spacer(1, 10))
+        currency_note = ""
+        if currency != "USD":
+            currency_note = f" (Currency: {currency})"
+        spend_summary = Paragraph(
+            f"Total current period spend: {format_currency(total_current_spend, currency)}{currency_note}", 
+            summary_style
+        )
+        elements.append(spend_summary)
+        elements.append(Spacer(1, 20))
+        
         # Add month-to-month comparison bar chart if we have previous period data
         if total_previous_spend > 0:
             elements.append(Paragraph("Period Cost Comparison", heading2_style))
             
             drawing = Drawing(450, 250)  # Increase drawing size
             bc = VerticalBarChart()
-            bc.x = 50
+            bc.x = 75
             bc.y = 50
-            bc.height = 150            # Increase chart height
-            bc.width = 350             # Increase chart width
+            bc.height = 150             # Increase chart height
+            bc.width = 300              # Adjust chart width
+            
+            # Format data with more reasonable precision
             bc.data = [[total_previous_spend, total_current_spend]]
             bc.bars[0].fillColor = colors.steelblue
             
+            # More sensible Y-axis configuration
+            max_value = max(total_previous_spend, total_current_spend)
+            
+            # Configure existing valueAxis with simpler label formatting
             bc.valueAxis.valueMin = 0
-            bc.valueAxis.valueMax = max(total_previous_spend, total_current_spend) * 1.1
-            bc.valueAxis.valueStep = bc.valueAxis.valueMax / 5
-            bc.categoryAxis.labels.boxAnchor = 'ne'
-            bc.categoryAxis.labels.dx = 8
-            bc.categoryAxis.labels.dy = -2
+            bc.valueAxis.valueMax = max_value * 1.1
+            bc.valueAxis.valueStep = max_value / 5
+            
+            # Helper function to format axis labels
+            def y_axis_formatter(value):
+                if value >= 1000000:
+                    return f"{value/1000000:.1f}M"
+                elif value >= 1000:
+                    return f"{value/1000:.0f}K"
+                return f"{value:.0f}"
+            
+            # Apply label formatter
+            bc.valueAxis.labelTextFormat = y_axis_formatter
+            
+            # Adjust spacing and positioning
+            bc.categoryAxis.labels.boxAnchor = 'n'
+            bc.categoryAxis.labels.dx = 0
+            bc.categoryAxis.labels.dy = -5
             bc.categoryAxis.labels.angle = 0
             bc.categoryAxis.categoryNames = ['Previous Period', 'Current Period']
             
@@ -784,89 +862,83 @@ def _export_enhanced_pdf(
         
         # Create the table headers for the detailed data
         elements.append(Paragraph("Detailed Cost Data", heading2_style))
+        
+        # Use simplified headers that are guaranteed to work
         table_headers = [
             "Profile",
             "Account ID",
-            f"Previous\nPeriod\n({previous_period_dates.split(' to ')[0]})",
-            f"Current\nPeriod\n({current_period_dates.split(' to ')[0]})",
-            "Services",
-            "Budgets",
-            "EC2\nInstances",
+            f"Previous Period\n({currency})",
+            f"Current Period\n({currency})",
+            "Top Services",
+            "Budget",
+            "EC2 Instances",
         ]
 
         table_data = [table_headers]
 
         for row in data:
+            if not row["success"]:
+                # Skip failed profiles
+                continue
+                
             # Convert costs to the target currency
             current_month_value = convert_currency(row['current_month'], "USD", currency)
             last_month_value = convert_currency(row['last_month'], "USD", currency)
             
-            # Format service costs - limit number of services shown to prevent overflow
+            # Format service costs - limit to top 6 services to prevent overflow
             services_data = []
-            for service, cost in row["service_costs"][:10]:  # Limit to top 10 services
+            for service, cost in row["service_costs"][:6]:  # Limit to top 6 services
                 converted_cost = convert_currency(cost, "USD", currency)
                 formatted_cost = format_currency(converted_cost, currency)
                 # Truncate long service names
-                if len(service) > 30:
-                    service = service[:30] + "..."
+                if len(service) > 25:
+                    service = service[:25] + "..."
                 services_data.append(f"{service}: {formatted_cost}")
             
-            if len(row["service_costs"]) > 10:
+            if len(row["service_costs"]) > 6:
                 services_data.append("...")
                 
             services_text = "\n".join(services_data) if services_data else "No costs"
             
-            # Format budget info - limit to most important items
-            budgets_data = []
-            budget_count = 0
-            for budget_item in row["budget_info"]:
-                if budget_count >= 5:  # Limit to 5 budget items
-                    budgets_data.append("...")
-                    break
-                    
-                if " limit: $" in budget_item:
-                    budget_name, limit_str = budget_item.split(" limit: $")
-                    if len(budget_name) > 15:  # Truncate long budget names
-                        budget_name = budget_name[:15] + "..."
-                    limit_value = float(limit_str)
-                    converted_limit = convert_currency(limit_value, "USD", currency)
-                    formatted_limit = format_currency(converted_limit, currency)
-                    budgets_data.append(f"{budget_name} limit: {formatted_limit}")
-                    budget_count += 1
-                elif " actual: $" in budget_item:
-                    budget_name, actual_str = budget_item.split(" actual: $")
-                    if len(budget_name) > 15:  # Truncate long budget names
-                        budget_name = budget_name[:15] + "..."
-                    actual_value = float(actual_str)
-                    converted_actual = convert_currency(actual_value, "USD", currency)
-                    formatted_actual = format_currency(converted_actual, currency)
-                    budgets_data.append(f"{budget_name} actual: {formatted_actual}")
-                    budget_count += 1
-                elif " forecast: $" in budget_item:
-                    budget_name, forecast_str = budget_item.split(" forecast: $")
-                    if len(budget_name) > 15:  # Truncate long budget names
-                        budget_name = budget_name[:15] + "..."
-                    forecast_value = float(forecast_str)
-                    converted_forecast = convert_currency(forecast_value, "USD", currency)
-                    formatted_forecast = format_currency(converted_forecast, currency)
-                    budgets_data.append(f"{budget_name} forecast: {formatted_forecast}")
-                    budget_count += 1
-                else:
-                    if len(budget_item) > 30:  # Truncate long items
-                        budget_item = budget_item[:30] + "..."
-                    budgets_data.append(budget_item)
-                    budget_count += 1
-                    
-            budgets_text = "\n".join(budgets_data) if budgets_data else "No budgets"
+            # Format budget info - show only most important items
+            # Get actual and limit from the budget
+            budget_limit = None
+            budget_actual = None
             
-            # Format EC2 instance summary
-            ec2_data_summary = "\n".join(
-                [
-                    f"{state.capitalize()}: {count}"
-                    for state, count in row["ec2_summary"].items()
-                    if count > 0
-                ]
-            )
+            for budget_item in row["budget_info"]:
+                if " limit: $" in budget_item:
+                    _, limit_str = budget_item.split(" limit: $")
+                    budget_limit = float(limit_str)
+                elif " actual: $" in budget_item:
+                    _, actual_str = budget_item.split(" actual: $")
+                    budget_actual = float(actual_str)
+            
+            # Create a simplified budget display
+            budget_data = []
+            if budget_limit is not None:
+                converted_limit = convert_currency(budget_limit, "USD", currency)
+                budget_data.append(f"Limit: {format_currency(converted_limit, currency)}")
+            
+            if budget_actual is not None:
+                converted_actual = convert_currency(budget_actual, "USD", currency)
+                budget_data.append(f"Actual: {format_currency(converted_actual, currency)}")
+                
+                # Add a percentage of limit indicator
+                if budget_limit is not None and budget_limit > 0:
+                    percentage = (budget_actual / budget_limit) * 100
+                    status = "OK" if percentage <= 100 else "OVER"
+                    budget_data.append(f"{status} ({percentage:.1f}%)")
+            
+            budgets_text = "\n".join(budget_data) if budget_data else "No budget"
+            
+            # Format EC2 instance summary more clearly
+            ec2_data = []
+            for state, count in row["ec2_summary"].items():
+                if count > 0:
+                    # Simplified format without emojis
+                    ec2_data.append(f"{state.capitalize()}: {count}")
+            
+            ec2_data_summary = "\n".join(ec2_data) if ec2_data else "No instances"
 
             table_data.append(
                 [
@@ -874,15 +946,17 @@ def _export_enhanced_pdf(
                     row["account_id"],
                     format_currency(last_month_value, currency),
                     format_currency(current_month_value, currency),
-                    services_text or "No costs",
-                    budgets_text or "No budgets",
-                    ec2_data_summary or "No instances",
+                    services_text,
+                    budgets_text,
+                    ec2_data_summary,
                 ]
             )
 
-        # Define column widths as percentages of the available width
-        col_widths = [100, 100, 80, 80, 220, 170, 80]
+        # Define column widths that work better in landscape mode
+        col_widths = [70, 85, 70, 70, 200, 120, 85]
         table = Table(table_data, repeatRows=1, colWidths=col_widths)
+        
+        # Add more distinctive styling
         table.setStyle(
             TableStyle(
                 [
@@ -896,6 +970,14 @@ def _export_enhanced_pdf(
                     ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
                     ("BACKGROUND", (0, 1), (-1, -1), colors.whitesmoke),
                     ("WORDWRAP", (0, 0), (-1, -1), True),  # Enable word wrapping
+                    # Add alternating row colors for better readability
+                    ("BACKGROUND", (0, 1), (-1, -1), colors.whitesmoke),
+                    ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.whitesmoke, colors.lightgrey]),
+                    # Add some padding
+                    ("TOPPADDING", (0, 0), (-1, -1), 3),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 3),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 3),
                 ]
             )
         )
@@ -1036,7 +1118,19 @@ def format_currency(amount: float, currency_code: str = "USD") -> str:
     Returns:
         Formatted amount with currency symbol
     """
-    symbol = get_currency_symbol(currency_code)
+    # Use currency codes for PDF rather than symbols for better compatibility
+    pdf_currency_prefixes = {
+        "USD": "$",      # Dollar sign
+        "INR": "Rs. ",   # Use "Rs. " instead of ₹ for better PDF compatibility
+        "EUR": "€",      # Euro sign
+        "GBP": "£",      # Pound sign
+        "JPY": "¥",      # Yen sign
+        "AUD": "A$",     # Australian dollar
+        "CAD": "C$",     # Canadian dollar
+        "CNY": "CN¥",    # Chinese yuan
+    }
+    
+    symbol = pdf_currency_prefixes.get(currency_code, "$")
     
     # Format with commas for thousands separator
     if currency_code == "JPY":
