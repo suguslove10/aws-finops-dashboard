@@ -22,8 +22,8 @@ dependencies = [
 keywords = ["aws", "finops", "dashboard", "cli", "cloud", "cost"]
 
 [project.urls]
-"Homepage" = "https://github.com/ravikiranvm/aws-finops-dashboard"
-"Source" = "https://github.com/ravikiranvm/aws-finops-dashboard"
+"Homepage" = "https://github.com/suguslove10/aws-finops-dashboard"
+"Source" = "https://github.com/suguslove10/aws-finops-dashboard"
 
 [project.scripts]
 aws-finops = "aws_finops_dashboard.cli:main"
