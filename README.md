@@ -88,7 +88,7 @@ pip install aws-finops-dashboard
 
 ```bash
 # Clone the repository
-git clone https://github.com/ravikiranvm/aws-finops-dashboard.git
+git clone https://github.com/suguslove10/aws-finops-dashboard.git
 cd aws-finops-dashboard
 
 # Install Python dependencies
