@@ -5,13 +5,15 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from aws_finops_dashboard.helpers import convert_currency, format_currency
+
 # Set precision context for Decimal operations
 getcontext().prec = 6
 
 console = Console()
 
 
-def create_trend_bars(monthly_costs: List[Tuple[str, float]]) -> None:
+def create_trend_bars(monthly_costs: List[Tuple[str, float]], currency: str = "USD") -> None:
     """Create colorful trend bars using Rich's styling and precise Decimal math."""
     if not monthly_costs:
         return
@@ -23,14 +25,20 @@ def create_trend_bars(monthly_costs: List[Tuple[str, float]]) -> None:
     table.add_column("", width=50)
     table.add_column("MoM Change", style="bright_yellow", width=12)
 
-    max_cost = max(cost for _, cost in monthly_costs)
+    # Convert costs to the target currency
+    converted_costs = []
+    for month, cost in monthly_costs:
+        converted_cost = convert_currency(cost, "USD", currency)
+        converted_costs.append((month, converted_cost))
+
+    max_cost = max(cost for _, cost in converted_costs)
     if max_cost == 0:
         console.print("[yellow]All costs are $0.00 for this period[/]")
         return
 
     prev_cost = None
 
-    for month, cost in monthly_costs:
+    for month, cost in converted_costs:
         cost_d = Decimal(str(cost))
         bar_length = int((cost / max_cost) * 40) if max_cost > 0 else 0
         bar = "█" * bar_length
@@ -67,13 +75,16 @@ def create_trend_bars(monthly_costs: List[Tuple[str, float]]) -> None:
                     change = f"[{color}]{sign}{change_pct}%[/]"
                     bar_color = color
 
-        table.add_row(month, f"${cost:,.2f}", f"[{bar_color}]{bar}[/]", change)
+        # Format the cost with appropriate currency symbol
+        formatted_cost = format_currency(cost, currency)
+        
+        table.add_row(month, formatted_cost, f"[{bar_color}]{bar}[/]", change)
         prev_cost = cost
 
     console.print(
         Panel(
             table,
-            title="[cyan]AWS Cost Trend Analysis[/]",
+            title=f"[cyan]AWS Cost Trend Analysis ({currency})[/]",
             border_style="bright_blue",
             padding=(1, 1),
         )

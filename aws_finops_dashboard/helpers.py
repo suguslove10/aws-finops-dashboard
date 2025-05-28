@@ -4,7 +4,7 @@ import os
 import re
 import sys
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 # Conditional import for tomllib
 if sys.version_info >= (3, 11):
@@ -17,8 +17,9 @@ else:
 
 import yaml
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import landscape, letter
+from reportlab.lib.pagesizes import landscape, letter, A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import inch
 from reportlab.platypus import (
     Flowable,
     Paragraph,
@@ -26,7 +27,15 @@ from reportlab.platypus import (
     Spacer,
     Table,
     TableStyle,
+    PageBreak,
+    Image,
+    ListFlowable,
+    ListItem,
 )
+from reportlab.graphics.shapes import Drawing
+from reportlab.graphics.charts.piecharts import Pie
+from reportlab.graphics.charts.barcharts import VerticalBarChart
+from reportlab.graphics.charts.legends import Legend
 from rich.console import Console
 
 from aws_finops_dashboard.types import ProfileData
@@ -213,23 +222,43 @@ def export_audit_report_to_json(
         return None
     
 def export_trend_data_to_json(
-    trend_data: List[Dict[str, Any]],
-    file_name: str = "trend_data",
-    path: Optional[str] = None) -> Optional[str]:
+    data: Dict[str, Any],
+    filename: str,
+    output_dir: Optional[str] = None,
+    currency: str = "USD"
+) -> Optional[str]:
     """Export trend data to a JSON file."""
     try:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M")
-        base_filename = f"{file_name}_{timestamp}.json"
-        output_filename = base_filename
-        if path:
-            os.makedirs(path, exist_ok=True)
-            output_filename = os.path.join(path, base_filename)
+        if not output_dir:
+            output_dir = os.getcwd()
+        os.makedirs(output_dir, exist_ok=True)
 
-        with open(output_filename, "w", encoding="utf-8") as jsonfile:
-            json.dump(trend_data, jsonfile, indent=4)
-        return output_filename
+        file_path = os.path.join(
+            output_dir, f"{filename}_trend_report.json"
+        )
+
+        # Convert any costs to the target currency
+        export_data = {
+            "currency": currency,
+            "profile": data["profile"],
+            "monthly_costs": []
+        }
+        
+        # Convert costs to the target currency
+        for month, cost in data["monthly_costs"]:
+            converted_cost = convert_currency(cost, "USD", currency)
+            export_data["monthly_costs"].append({
+                "month": month,
+                "cost": converted_cost,
+                "formatted_cost": format_currency(converted_cost, currency)
+            })
+
+        with open(file_path, "w") as f:
+            json.dump(export_data, f, indent=2)
+
+        return file_path
     except Exception as e:
-        console.print(f"[bold red]Error exporting trend data to JSON: {str(e)}[/]")
+        console.print(f"[bold red]Error exporting trend data to JSON: {e}[/]")
         return None
 
 def export_cost_dashboard_to_pdf(
@@ -238,43 +267,118 @@ def export_cost_dashboard_to_pdf(
     output_dir: Optional[str] = None,
     previous_period_dates: str = "N/A",
     current_period_dates: str = "N/A",
+    currency: str = "USD",
+    enhanced: bool = False,
 ) -> Optional[str]:
-    """Export dashboard data to a PDF file."""
+    """Export dashboard data to a PDF file with enhanced visualizations if requested."""
+    if enhanced:
+        return _export_enhanced_pdf(
+            data, filename, output_dir, previous_period_dates, current_period_dates, currency
+        )
+    else:
+        return _export_standard_pdf(
+            data, filename, output_dir, previous_period_dates, current_period_dates, currency
+        )
+        
+def _export_standard_pdf(
+    data: List[ProfileData],
+    filename: str,
+    output_dir: Optional[str] = None,
+    previous_period_dates: str = "N/A",
+    current_period_dates: str = "N/A",
+    currency: str = "USD",
+) -> Optional[str]:
+    """Export dashboard data to a standard PDF file."""
     try:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M")
-        base_filename = f"{filename}_{timestamp}.pdf"
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import landscape, letter
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.platypus import (
+            Paragraph,
+            SimpleDocTemplate,
+            Spacer,
+            Table,
+            TableStyle,
+        )
+    except ImportError:
+        console.print(
+            "[bold red]ReportLab library is required for PDF export. "
+            "Please install it using: pip install reportlab[/]"
+        )
+        return None
 
-        if output_dir:
-            os.makedirs(output_dir, exist_ok=True)
-            output_filename = os.path.join(output_dir, base_filename)
-        else:
-            output_filename = base_filename
+    try:
+        if not output_dir:
+            output_dir = os.getcwd()
+        os.makedirs(output_dir, exist_ok=True)
 
-        doc = SimpleDocTemplate(output_filename, pagesize=landscape(letter))
+        file_path = os.path.join(output_dir, f"{filename}.pdf")
+
+        # Set up the document
+        doc = SimpleDocTemplate(
+            file_path, pagesize=landscape(letter), rightMargin=30, leftMargin=30
+        )
+
         styles = getSampleStyleSheet()
-        elements: List[Flowable] = []
+        elements = []
 
-        previous_period_header = f"Cost for period\n({previous_period_dates})"
-        current_period_header = f"Cost for period\n({current_period_dates})"
-
-        headers = [
-            "CLI Profile",
-            "AWS Account ID",
-            previous_period_header,
-            current_period_header,
-            "Cost By Service",
-            "Budget Status",
+        # Create the table headers
+        table_headers = [
+            "Profile",
+            "Account ID",
+            f"Previous Period\n({previous_period_dates})",
+            f"Current Period\n({current_period_dates})",
+            "Services",
+            "Budgets",
             "EC2 Instances",
         ]
-        table_data = [headers]
+
+        table_data = [table_headers]
+
+        # Get currency symbol for formatting
+        currency_symbol = get_currency_symbol(currency)
 
         for row in data:
-            services_data = "\n".join(
-                [f"{service}: ${cost:.2f}" for service, cost in row["service_costs"]]
-            )
-            budgets_data = (
-                "\n".join(row["budget_info"]) if row["budget_info"] else "No budgets"
-            )
+            # Convert costs to the target currency
+            current_month_value = convert_currency(row['current_month'], "USD", currency)
+            last_month_value = convert_currency(row['last_month'], "USD", currency)
+            
+            # Format service costs
+            services_data = []
+            for service, cost in row["service_costs"]:
+                converted_cost = convert_currency(cost, "USD", currency)
+                formatted_cost = format_currency(converted_cost, currency)
+                services_data.append(f"{service}: {formatted_cost}")
+            
+            services_text = "\n".join(services_data) if services_data else "No costs"
+            
+            # Format budget info
+            budgets_data = []
+            for budget_item in row["budget_info"]:
+                if " limit: $" in budget_item:
+                    budget_name, limit_str = budget_item.split(" limit: $")
+                    limit_value = float(limit_str)
+                    converted_limit = convert_currency(limit_value, "USD", currency)
+                    formatted_limit = format_currency(converted_limit, currency)
+                    budgets_data.append(f"{budget_name} limit: {formatted_limit}")
+                elif " actual: $" in budget_item:
+                    budget_name, actual_str = budget_item.split(" actual: $")
+                    actual_value = float(actual_str)
+                    converted_actual = convert_currency(actual_value, "USD", currency)
+                    formatted_actual = format_currency(converted_actual, currency)
+                    budgets_data.append(f"{budget_name} actual: {formatted_actual}")
+                elif " forecast: $" in budget_item:
+                    budget_name, forecast_str = budget_item.split(" forecast: $")
+                    forecast_value = float(forecast_str)
+                    converted_forecast = convert_currency(forecast_value, "USD", currency)
+                    formatted_forecast = format_currency(converted_forecast, currency)
+                    budgets_data.append(f"{budget_name} forecast: {formatted_forecast}")
+                else:
+                    budgets_data.append(budget_item)
+                    
+            budgets_text = "\n".join(budgets_data) if budgets_data else "No budgets"
+            
+            # Format EC2 instance summary
             ec2_data_summary = "\n".join(
                 [
                     f"{state}: {count}"
@@ -287,10 +391,10 @@ def export_cost_dashboard_to_pdf(
                 [
                     row["profile"],
                     row["account_id"],
-                    f"${row['last_month']:.2f}",
-                    f"${row['current_month']:.2f}",
-                    services_data or "No costs",
-                    budgets_data or "No budgets",
+                    format_currency(last_month_value, currency),
+                    format_currency(current_month_value, currency),
+                    services_text or "No costs",
+                    budgets_text or "No budgets",
                     ec2_data_summary or "No instances",
                 ]
             )
@@ -312,19 +416,356 @@ def export_cost_dashboard_to_pdf(
         )
 
         elements.append(
-            Paragraph("AWS FinOps Dashboard (Cost Report)", styles["Title"])
+            Paragraph(f"AWS FinOps Dashboard ({currency})", styles["Title"])
         )
         elements.append(Spacer(1, 12))
         elements.append(table)
         elements.append(Spacer(1, 4))
         current_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        footer_text = f"This report is generated using AWS FinOps Dashboard (CLI) \u00a9 2025 on {current_time_str}"
-        elements.append(Paragraph(footer_text, audit_footer_style))
+        elements.append(
+            Paragraph(
+                f"Report generated on: {current_time_str}", styles["Normal"]
+            )
+        )
 
+        # Build the document
         doc.build(elements)
-        return os.path.abspath(output_filename)
+        return file_path
     except Exception as e:
-        console.print(f"[bold red]Error exporting to PDF: {str(e)}[/]")
+        console.print(f"[bold red]Error exporting dashboard to PDF: {e}[/]")
+        import traceback
+        console.print(traceback.format_exc())
+        return None
+        
+def _export_enhanced_pdf(
+    data: List[ProfileData],
+    filename: str,
+    output_dir: Optional[str] = None,
+    previous_period_dates: str = "N/A",
+    current_period_dates: str = "N/A",
+    currency: str = "USD",
+) -> Optional[str]:
+    """Export dashboard data to a PDF file with enhanced visualizations."""
+    try:
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import landscape, letter, A4
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.platypus import (
+            Paragraph,
+            SimpleDocTemplate,
+            Spacer,
+            Table,
+            TableStyle,
+            PageBreak,
+            Image,
+            ListFlowable,
+            ListItem,
+        )
+        from reportlab.graphics.shapes import Drawing
+        from reportlab.graphics.charts.piecharts import Pie
+        from reportlab.graphics.charts.barcharts import VerticalBarChart
+        from reportlab.graphics.charts.legends import Legend
+        from reportlab.lib.units import inch
+    except ImportError:
+        console.print(
+            "[bold red]ReportLab library is required for PDF export. "
+            "Please install it using: pip install reportlab[/]"
+        )
+        return None
+
+    try:
+        if not output_dir:
+            output_dir = os.getcwd()
+        os.makedirs(output_dir, exist_ok=True)
+
+        file_path = os.path.join(output_dir, f"{filename}.pdf")
+
+        # Set up the document with A4 portrait for better charts
+        doc = SimpleDocTemplate(
+            file_path, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30
+        )
+
+        styles = getSampleStyleSheet()
+        # Add custom styles
+        styles.add(ParagraphStyle(name='Title', 
+                                 fontName='Helvetica-Bold',
+                                 fontSize=18, 
+                                 spaceAfter=12,
+                                 alignment=1))  # 1 = center alignment
+        
+        styles.add(ParagraphStyle(name='Heading2', 
+                                 fontName='Helvetica-Bold',
+                                 fontSize=14, 
+                                 spaceAfter=8,
+                                 spaceBefore=12))
+        
+        styles.add(ParagraphStyle(name='SmallText', 
+                                 fontName='Helvetica',
+                                 fontSize=8))
+        
+        styles.add(ParagraphStyle(name='ExecutiveSummary', 
+                                 fontName='Helvetica-Bold',
+                                 fontSize=12,
+                                 spaceAfter=10,
+                                 spaceBefore=10))
+
+        elements = []
+
+        # Add title and date
+        elements.append(Paragraph(f"AWS FinOps Dashboard ({currency})", styles["Title"]))
+        current_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        elements.append(Paragraph(f"Report generated on: {current_time_str}", styles["SmallText"]))
+        elements.append(Spacer(1, 20))
+        
+        # Add executive summary
+        total_current_spend = 0
+        total_previous_spend = 0
+        total_accounts = len(data)
+        
+        for profile_data in data:
+            if profile_data["success"]:
+                current_spend = convert_currency(profile_data["current_month"], "USD", currency)
+                previous_spend = convert_currency(profile_data["last_month"], "USD", currency)
+                total_current_spend += current_spend
+                total_previous_spend += previous_spend
+        
+        percentage_change = 0
+        if total_previous_spend > 0:
+            percentage_change = ((total_current_spend - total_previous_spend) / total_previous_spend) * 100
+        
+        change_text = "no change"
+        if percentage_change > 0:
+            change_text = f"increased by {percentage_change:.2f}%"
+        elif percentage_change < 0:
+            change_text = f"decreased by {abs(percentage_change):.2f}%"
+            
+        formatted_current = format_currency(total_current_spend, currency)
+        formatted_previous = format_currency(total_previous_spend, currency)
+        
+        elements.append(Paragraph("Executive Summary", styles["Heading2"]))
+        elements.append(Paragraph(
+            f"This report summarizes AWS costs across {total_accounts} account{'s' if total_accounts > 1 else ''}. "
+            f"The total spend for the current period ({current_period_dates}) is {formatted_current}, which has {change_text} "
+            f"compared to the previous period ({previous_period_dates}) spend of {formatted_previous}.",
+            styles["ExecutiveSummary"]
+        ))
+        
+        # Add recommendations based on data
+        elements.append(Paragraph("Key Observations & Recommendations:", styles["Heading2"]))
+        
+        recommendations = []
+        
+        # Check for cost increases
+        if percentage_change > 10:
+            recommendations.append("⚠️ Significant cost increase detected. Review services with the highest growth.")
+        
+        # Check for stopped instances
+        stopped_instances = 0
+        for profile_data in data:
+            if profile_data["success"] and "stopped" in profile_data["ec2_summary"]:
+                stopped_instances += profile_data["ec2_summary"]["stopped"]
+        
+        if stopped_instances > 0:
+            recommendations.append(f"💡 You have {stopped_instances} stopped EC2 instance{'s' if stopped_instances > 1 else ''}. Consider terminating if not needed to save on EBS costs.")
+            
+        # Always add some general recommendations
+        if not recommendations:
+            recommendations.append("💡 Consider implementing AWS Cost Allocation Tags to better track spending by project or department.")
+            recommendations.append("💡 Review Reserved Instance and Savings Plans coverage to optimize long-term costs.")
+            recommendations.append("💡 Utilize S3 Lifecycle policies to move infrequently accessed data to cheaper storage tiers.")
+        
+        recommendation_items = []
+        for rec in recommendations:
+            recommendation_items.append(ListItem(Paragraph(rec, styles["Normal"])))
+        
+        elements.append(ListFlowable(recommendation_items, bulletType='bullet'))
+        elements.append(Spacer(1, 20))
+        
+        # Add service cost distribution chart (pie chart)
+        elements.append(Paragraph("Cost Distribution by Service", styles["Heading2"]))
+        
+        # Aggregate all services across profiles
+        all_services = {}
+        for profile_data in data:
+            if profile_data["success"]:
+                for service, cost in profile_data["service_costs"]:
+                    converted_cost = convert_currency(cost, "USD", currency)
+                    if service in all_services:
+                        all_services[service] += converted_cost
+                    else:
+                        all_services[service] = converted_cost
+        
+        # Sort services by cost and take top 10
+        top_services = sorted(all_services.items(), key=lambda x: x[1], reverse=True)[:10]
+        
+        # Create pie chart
+        if top_services:
+            drawing = Drawing(400, 200)
+            pie = Pie()
+            pie.x = 150
+            pie.y = 50
+            pie.width = 100
+            pie.height = 100
+            pie.data = [cost for _, cost in top_services]
+            pie.labels = [service for service, _ in top_services]
+            pie.slices.strokeWidth = 0.5
+            
+            # Add different colors for pie slices
+            pie_colors = [colors.red, colors.green, colors.blue, colors.yellow, colors.cyan, 
+                    colors.magenta, colors.pink, colors.lavender, colors.orange, colors.purple]
+            for i, color in enumerate(pie_colors[:len(top_services)]):
+                pie.slices[i].fillColor = color
+            
+            drawing.add(pie)
+            
+            # Add legend
+            legend = Legend()
+            legend.alignment = 'right'
+            legend.x = 280
+            legend.y = 150
+            legend.colorNamePairs = [(pie_colors[i], (service[:20] + '...' if len(service) > 20 else service)) 
+                                    for i, (service, _) in enumerate(top_services)]
+            drawing.add(legend)
+            
+            elements.append(drawing)
+            elements.append(Spacer(1, 10))
+        
+        # Add month-to-month comparison bar chart if we have previous period data
+        if total_previous_spend > 0:
+            elements.append(Paragraph("Period Cost Comparison", styles["Heading2"]))
+            
+            drawing = Drawing(400, 200)
+            bc = VerticalBarChart()
+            bc.x = 50
+            bc.y = 50
+            bc.height = 125
+            bc.width = 300
+            bc.data = [[total_previous_spend, total_current_spend]]
+            bc.bars[0].fillColor = colors.steelblue
+            
+            bc.valueAxis.valueMin = 0
+            bc.valueAxis.valueMax = max(total_previous_spend, total_current_spend) * 1.1
+            bc.valueAxis.valueStep = bc.valueAxis.valueMax / 5
+            bc.categoryAxis.labels.boxAnchor = 'ne'
+            bc.categoryAxis.labels.dx = 8
+            bc.categoryAxis.labels.dy = -2
+            bc.categoryAxis.labels.angle = 0
+            bc.categoryAxis.categoryNames = ['Previous Period', 'Current Period']
+            
+            drawing.add(bc)
+            elements.append(drawing)
+            elements.append(Spacer(1, 20))
+        
+        # Add page break before detailed table
+        elements.append(PageBreak())
+        
+        # Create the table headers for the detailed data
+        elements.append(Paragraph("Detailed Cost Data", styles["Heading2"]))
+        table_headers = [
+            "Profile",
+            "Account ID",
+            f"Previous Period\n({previous_period_dates})",
+            f"Current Period\n({current_period_dates})",
+            "Services",
+            "Budgets",
+            "EC2 Instances",
+        ]
+
+        table_data = [table_headers]
+
+        for row in data:
+            # Convert costs to the target currency
+            current_month_value = convert_currency(row['current_month'], "USD", currency)
+            last_month_value = convert_currency(row['last_month'], "USD", currency)
+            
+            # Format service costs
+            services_data = []
+            for service, cost in row["service_costs"]:
+                converted_cost = convert_currency(cost, "USD", currency)
+                formatted_cost = format_currency(converted_cost, currency)
+                services_data.append(f"{service}: {formatted_cost}")
+            
+            services_text = "\n".join(services_data) if services_data else "No costs"
+            
+            # Format budget info
+            budgets_data = []
+            for budget_item in row["budget_info"]:
+                if " limit: $" in budget_item:
+                    budget_name, limit_str = budget_item.split(" limit: $")
+                    limit_value = float(limit_str)
+                    converted_limit = convert_currency(limit_value, "USD", currency)
+                    formatted_limit = format_currency(converted_limit, currency)
+                    budgets_data.append(f"{budget_name} limit: {formatted_limit}")
+                elif " actual: $" in budget_item:
+                    budget_name, actual_str = budget_item.split(" actual: $")
+                    actual_value = float(actual_str)
+                    converted_actual = convert_currency(actual_value, "USD", currency)
+                    formatted_actual = format_currency(converted_actual, currency)
+                    budgets_data.append(f"{budget_name} actual: {formatted_actual}")
+                elif " forecast: $" in budget_item:
+                    budget_name, forecast_str = budget_item.split(" forecast: $")
+                    forecast_value = float(forecast_str)
+                    converted_forecast = convert_currency(forecast_value, "USD", currency)
+                    formatted_forecast = format_currency(converted_forecast, currency)
+                    budgets_data.append(f"{budget_name} forecast: {formatted_forecast}")
+                else:
+                    budgets_data.append(budget_item)
+                    
+            budgets_text = "\n".join(budgets_data) if budgets_data else "No budgets"
+            
+            # Format EC2 instance summary
+            ec2_data_summary = "\n".join(
+                [
+                    f"{state}: {count}"
+                    for state, count in row["ec2_summary"].items()
+                    if count > 0
+                ]
+            )
+
+            table_data.append(
+                [
+                    row["profile"],
+                    row["account_id"],
+                    format_currency(last_month_value, currency),
+                    format_currency(current_month_value, currency),
+                    services_text or "No costs",
+                    budgets_text or "No budgets",
+                    ec2_data_summary or "No instances",
+                ]
+            )
+
+        table = Table(table_data, repeatRows=1)
+        table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.steelblue),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+                    ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
+                    ("FONTSIZE", (0, 0), (-1, -1), 8),
+                    ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
+                    ("BACKGROUND", (0, 1), (-1, -1), colors.whitesmoke),
+                ]
+            )
+        )
+
+        elements.append(table)
+        elements.append(Spacer(1, 20))
+        
+        # Add footer
+        elements.append(Paragraph(
+            f"Report generated with AWS FinOps Dashboard on {current_time_str}",
+            styles["SmallText"]
+        ))
+
+        # Build the document
+        doc.build(elements)
+        return file_path
+    except Exception as e:
+        console.print(f"[bold red]Error exporting dashboard to PDF: {e}[/]")
+        import traceback
+        console.print(traceback.format_exc())
         return None
 
 
@@ -384,3 +825,85 @@ def load_config_file(file_path: str) -> Optional[Dict[str, Any]]:
     except Exception as e:
         console.print(f"[bold red]Error loading configuration file {file_path}: {e}[/]")
         return None
+
+def get_currency_symbol(currency_code: str = "USD") -> str:
+    """Get the currency symbol for a given currency code."""
+    currency_symbols = {
+        "USD": "$",
+        "INR": "₹",
+        "EUR": "€",
+        "GBP": "£",
+        "JPY": "¥",
+        "AUD": "A$",
+        "CAD": "C$",
+        "CNY": "¥",
+    }
+    return currency_symbols.get(currency_code, "$")
+
+def convert_currency(amount: float, from_currency: str = "USD", to_currency: str = "USD") -> float:
+    """
+    Convert amount from one currency to another.
+    
+    Args:
+        amount: Amount to convert
+        from_currency: Source currency code (default: USD)
+        to_currency: Target currency code (default: USD)
+        
+    Returns:
+        Converted amount
+    """
+    if from_currency == to_currency:
+        return amount
+        
+    # Exchange rates as of September 2023 (would ideally be fetched from an API)
+    exchange_rates = {
+        "USD_INR": 83.5,  # 1 USD = 83.5 INR
+        "USD_EUR": 0.91,  # 1 USD = 0.91 EUR
+        "USD_GBP": 0.79,  # 1 USD = 0.79 GBP
+        "USD_JPY": 149.2, # 1 USD = 149.2 JPY
+        "USD_AUD": 1.55,  # 1 USD = 1.55 AUD
+        "USD_CAD": 1.38,  # 1 USD = 1.38 CAD
+        "USD_CNY": 7.29,  # 1 USD = 7.29 CNY
+    }
+    
+    # For simplicity, we only support conversion from USD to other currencies
+    if from_currency == "USD":
+        rate_key = f"USD_{to_currency}"
+        if rate_key in exchange_rates:
+            return amount * exchange_rates[rate_key]
+    
+    # If currency pair not supported, return original amount
+    return amount
+
+def format_currency(amount: float, currency_code: str = "USD") -> str:
+    """
+    Format amount with currency symbol.
+    
+    Args:
+        amount: Amount to format
+        currency_code: Currency code (default: USD)
+        
+    Returns:
+        Formatted amount with currency symbol
+    """
+    symbol = get_currency_symbol(currency_code)
+    
+    # Format with commas for thousands separator
+    if currency_code == "JPY":
+        # No decimal places for JPY
+        return f"{symbol}{amount:,.0f}"
+    elif currency_code == "INR":
+        # Format Indian style with lakhs and crores
+        if amount < 100000:  # Less than 1 lakh
+            return f"{symbol}{amount:,.2f}"
+        elif amount < 10000000:  # Less than 1 crore
+            # Convert to lakhs (1 lakh = 100,000)
+            lakhs = amount / 100000
+            return f"{symbol}{lakhs:.2f}L"
+        else:  # 1 crore or more
+            # Convert to crores (1 crore = 10,000,000)
+            crores = amount / 10000000
+            return f"{symbol}{crores:.2f}Cr"
+    else:
+        # Default formatting with 2 decimal places
+        return f"{symbol}{amount:,.2f}"

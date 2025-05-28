@@ -166,6 +166,19 @@ def main() -> int:
         action="store_true",
         help="Skip Savings Plans analysis when generating optimization recommendations",
     )
+    parser.add_argument(
+        "--currency",
+        "-c",
+        choices=["USD", "INR", "EUR", "GBP", "JPY", "AUD", "CAD", "CNY"],
+        help="Currency to display costs in (default: USD)",
+        type=str,
+        default="USD",
+    )
+    parser.add_argument(
+        "--enhanced-pdf",
+        action="store_true",
+        help="Generate enhanced PDF reports with visualizations and executive summary",
+    )
 
     args = parser.parse_args()
 

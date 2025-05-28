@@ -183,6 +183,8 @@ aws-finops [options]
 | `--cpu-threshold` | CPU utilization threshold for EC2 right-sizing recommendations (percent, default: 40.0). |
 | `--skip-ri-analysis` | Skip Reserved Instance analysis when generating optimization recommendations. |
 | `--skip-savings-plans` | Skip Savings Plans analysis when generating optimization recommendations. |
+| `--currency`, `-c` | Currency to display costs in (choices: USD, INR, EUR, GBP, JPY, AUD, CAD, CNY, default: USD). |
+| `--enhanced-pdf` | Generate enhanced PDF reports with visualizations and executive summary. |
 
 ### Examples
 
@@ -254,6 +256,15 @@ aws-finops --profiles dev prod --optimize --cpu-threshold 30.0
 
 # Get cost optimization recommendations without Reserved Instance analysis
 aws-finops --all --optimize --skip-ri-analysis
+
+# Display costs in Indian Rupees (INR)
+aws-finops --profiles dev prod --currency INR
+
+# Generate PDF report with costs in Euros
+aws-finops --all --report-name aws_costs_eur --report-type pdf --currency EUR
+
+# Generate enhanced PDF report with visualizations and executive summary
+aws-finops --all --report-name enhanced_report --report-type pdf --enhanced-pdf
 ```
 
 You'll see a live-updating table of your AWS account cost and usage details in the terminal. If export options are specified, a report file will also be generated upon completion.
@@ -283,180 +294,3 @@ tag = ["CostCenter=Alpha", "Project=Phoenix"] # Optional
 audit = false # Set to true to run audit report by default
 trend = false # Set to true to run trend report by default
 ```
-
-### YAML Configuration Example (`config.yaml` or `config.yml`)
-
-```yaml
-# config.yaml
-profiles:
-  - dev-profile
-  - prod-profile
-regions:
-  - us-east-1
-  - eu-west-2
-combine: true
-report_name: "monthly_finops_summary"
-report_type:
-  - csv
-  - pdf # For cost dashboard. For audit, only PDF is used.
-dir: "./reports/aws-finops"
-time_range: 30
-tag:
-  - "CostCenter=Alpha"
-  - "Project=Phoenix"
-audit: false # Set to true to run audit report by default
-trend: false # Set to true to run trend report by default
-```
-
-### JSON Configuration Example (`config.json`)
-
-```json
-{
-  "profiles": ["dev-profile", "prod-profile"],
-  "regions": ["us-east-1", "eu-west-2"],
-  "combine": true,
-  "report_name": "monthly_finops_summary",
-  "report_type": ["csv", "pdf"], /* For cost dashboard. For audit, only PDF is used. */
-  "dir": "./reports/aws-finops",
-  "time_range": 30,
-  "tag": ["CostCenter=Alpha", "Project=Phoenix"],
-  "audit": false, /* Set to true to run audit report by default */
-  "trend": false /* Set to true to run trend report by default */
-}
-```
----
-
-## Export Formats
-
-### CSV Output Format
-
-When exporting to CSV, a file is generated with the following columns:
-
-- `CLI Profile`
-- `AWS Account ID`
-- `Last Month Cost` (or previous period based on time range)
-- `Current Month Cost` (or current period based on time range)
-- `Cost By Service` (Each service and its cost appears on a new line within the cell)
-- `Budget Status` (Each budget's limit and actual spend appears on a new line within the cell)
-- `EC2 Instances` (Each instance state and its count appears on a new line within the cell)
-
-**Note:** Due to the multi-line formatting in some cells, it's best viewed in spreadsheet software (like Excel, Google Sheets, LibreOffice Calc) rather than plain text editors.
-
-### JSON Output Format
-
-When exporting to JSON, a structured file is generated that includes all dashboard data in a format that's easy to parse programmatically.
-
-### PDF Output Format (for Audit Report)
-
-When exporting to PDF, a file is generated with the following columns:
-
-- `Profile`
-- `Account ID`
-- `Untagged Resources`
-- `Stopped EC2 Instances`
-- `Unused Volumes`
-- `Unused EIPs`
-- `Budget Alerts`
-
----
-
-## Cost For Every Run
-
-This script makes API calls to AWS, primarily to Cost Explorer, Budgets, EC2, and STS. AWS may charge for Cost Explorer API calls (typically `$0.01` for each API call, check current pricing).
-
-The number of API calls depends heavily on the options used:
-
-- **Default dashboard when `--audit` or `--trend` flags not used**: 
-  - It costs you $0.06 for one AWS Profile and $0.03 extra for each AWS profile queried.
-- **Cost Trend dashboard when `--trend` flag is used**:
-  - It costs you $0.03 for each AWS profile queried.
-- **Audit Dashboard when `--audit` flag is used**:
-  - Free
-
-**To minimize API calls and potential costs:**
-
-- Use the `--profiles` argument to specify only the profiles you need.
-- Consider using the `--combine` option when working with multiple profiles from the same AWS account.
-
-The exact cost per run is usually negligible but depends on the scale of your usage and AWS pricing.
-
----
-
-## Contributing
-
-Contributions are welcome! Feel free to fork and improve the project.
-
-### Development Setup with pip
-
-```bash
-# Fork this repository on GitHub first:
-# https://github.com/ravikiranvm/aws-finops-dashboard
-
-# Then clone your fork locally
-git clone https://github.com/your-username/aws-finops-dashboard.git
-cd aws-finops-dashboard
-
-# Create and activate a virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows use `venv\Scripts\activate`
-
-# Install dependencies
-pip install -r requirements.txt
-pip install -e ".[dev]"
-
-# Run the formatter
-hatch run fmt
-
-# Run linters
-hatch run lint
-
-# Run the tool
-python -m aws_finops_dashboard.cli --help
-```
-
-### Development Setup with uv
-
-`uv` provides a much faster development environment setup:
-
-```bash
-# Fork this repository on GitHub first:
-# https://github.com/ravikiranvm/aws-finops-dashboard
-
-# Then clone your fork locally
-git clone https://github.com/your-username/aws-finops-dashboard.git
-cd aws-finops-dashboard
-
-# Install uv if you don't have it yet
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Create and sync the virtual environment (.venv)
-uv venv
-uv pip install -e ".[dev]"
-
-# Activate the virtual environment
-source .venv/bin/activate  # On Windows use `.venv\Scripts\activate`
-
-# Run the formatter
-uv run hatch run fmt
-
-# Run linters
-uv run hatch run lint
-
-# Run tests 
-uv run hatch run test
-
-# Run the tool
-aws-finops
-```
-
----
-
-## Acknowledgments
-
-Special thanks to [cschnidr](https://github.com/cschnidr) & [MKAbuMattar](https://github.com/MKAbuMattar) for their valuable contributions to significantly improve this project!
-
----
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

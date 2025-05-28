@@ -33,7 +33,9 @@ from aws_finops_dashboard.helpers import (
     export_cost_dashboard_to_pdf,
     export_audit_report_to_csv,
     export_audit_report_to_json,
-    export_trend_data_to_json
+    export_trend_data_to_json,
+    convert_currency,
+    format_currency,
 )
 from aws_finops_dashboard.profile_processor import (
     process_combined_profiles,
@@ -49,7 +51,7 @@ console = Console()
 
 def _initialize_profiles(
     args: argparse.Namespace,
-) -> Tuple[List[str], Optional[List[str]], Optional[int]]:
+) -> Tuple[List[str], Optional[List[str]], Optional[int], str]:
     """Initialize AWS profiles based on arguments."""
     available_profiles = get_aws_profiles()
     if not available_profiles:
@@ -83,7 +85,7 @@ def _initialize_profiles(
                 "[yellow]No default profile found. Using all available profiles.[/]"
             )
 
-    return profiles_to_use, args.regions, args.time_range
+    return profiles_to_use, args.regions, args.time_range, args.currency
 
 
 def _run_audit_report(profiles_to_use: List[str], args: argparse.Namespace) -> None:
@@ -225,79 +227,43 @@ def _run_audit_report(profiles_to_use: List[str], args: argparse.Namespace) -> N
                 
 
 def _run_trend_analysis(profiles_to_use: List[str], args: argparse.Namespace) -> None:
-    """Analyze and display cost trends."""
-    console.print("[bold bright_cyan]Analysing cost trends...[/]")
-    raw_trend_data = []
-    if args.combine:
-        account_profiles = defaultdict(list)
+    """Run cost trend analysis for the past 6 months."""
+    console.print(
+        "[bright_blue]===== AWS Cost Trend Analysis =====[/]\n"
+        "[bright_blue]Running cost trend analysis for the past 6 months...[/]\n"
+    )
+
+    try:
         for profile in profiles_to_use:
-            try:
-                session = boto3.Session(profile_name=profile)
-                account_id = get_account_id(session)
-                if account_id:
-                    account_profiles[account_id].append(profile)
-            except Exception as e:
-                console.print(
-                    f"[red]Error checking account ID for profile {profile}: {str(e)}[/]"
+            console.print(f"[bright_cyan]Processing profile: {profile}[/]")
+            session = boto3.Session(profile_name=profile)
+            if not session:
+                console.print(f"[bold red]Error creating session for profile {profile}[/]")
+                continue
+
+            # Get cost data with trend=True to get the past 6 months
+            cost_data = get_cost_data(session, tag=args.tag, get_trend=True)
+            
+            # Display monthly cost trend
+            if cost_data["monthly_trend_data"]:
+                create_trend_bars(cost_data["monthly_trend_data"], args.currency)
+            else:
+                console.print("[yellow]No trend data available for this profile[/]")
+                
+            # Export trend data if a report name is specified
+            if args.report_name and "json" in args.report_type:
+                trend_data = {
+                    "profile": profile,
+                    "monthly_costs": cost_data["monthly_trend_data"],
+                }
+                export_trend_data_to_json(
+                    trend_data, args.report_name, args.dir, args.currency
                 )
 
-        for account_id, profiles in account_profiles.items():
-            try:
-                primary_profile = profiles[0]
-                session = boto3.Session(profile_name=primary_profile)
-                cost_data = get_trend(session, args.tag)
-                trend_data = cost_data.get("monthly_costs")
-
-                if not trend_data:
-                    console.print(
-                        f"[yellow]No trend data available for account {account_id}[/]"
-                    )
-                    continue
-
-                profile_list = ", ".join(profiles)
-                console.print(
-                    f"\n[bright_yellow]Account: {account_id} (Profiles: {profile_list})[/]"
-                )
-                raw_trend_data.append(cost_data)
-                create_trend_bars(trend_data)
-            except Exception as e:
-                console.print(
-                    f"[red]Error getting trend for account {account_id}: {str(e)}[/]"
-                )
-
-    else:
-        for profile in profiles_to_use:
-            try:
-                session = boto3.Session(profile_name=profile)
-                cost_data = get_trend(session, args.tag)
-                trend_data = cost_data.get("monthly_costs")
-                account_id = cost_data.get("account_id", "Unknown")
-
-                if not trend_data:
-                    console.print(
-                        f"[yellow]No trend data available for profile {profile}[/]"
-                    )
-                    continue
-
-                console.print(
-                    f"\n[bright_yellow]Account: {account_id} (Profile: {profile})[/]"
-                )
-                raw_trend_data.append(cost_data)
-                create_trend_bars(trend_data)
-            except Exception as e:
-                console.print(
-                    f"[red]Error getting trend for profile {profile}: {str(e)}[/]"
-                )
-
-    if raw_trend_data and args.report_name and args.report_type:
-        if "json" in args.report_type:
-            json_path = export_trend_data_to_json(
-                raw_trend_data, args.report_name, args.dir
-            )
-            if json_path:
-                console.print(
-                    f"[bright_green]Successfully exported trend data to JSON format: {json_path}[/]"
-                )
+    except Exception as e:
+        console.print(f"[bold red]Error in trend analysis: {str(e)}[/]")
+        import traceback
+        console.print(traceback.format_exc())
 
 
 def _get_display_table_period_info(
@@ -357,7 +323,7 @@ def create_display_table(
     )
 
 
-def add_profile_to_table(table: Table, profile_data: ProfileData) -> None:
+def add_profile_to_table(table: Table, profile_data: ProfileData, currency: str = "USD") -> None:
     """Add profile data to the display table."""
     if profile_data["success"]:
         percentage_change = profile_data.get("percent_change_in_total_cost")
@@ -371,18 +337,63 @@ def add_profile_to_table(table: Table, profile_data: ProfileData) -> None:
             elif percentage_change == 0:
                 change_text = "\n\n[bright_yellow]➡ 0.00%[/]"
 
+        # Convert currency values
+        current_month_value = convert_currency(profile_data['current_month'], "USD", currency)
+        last_month_value = convert_currency(profile_data['last_month'], "USD", currency)
+        
+        # Format with currency symbol
+        current_month_formatted = format_currency(current_month_value, currency)
+        last_month_formatted = format_currency(last_month_value, currency)
+        
         current_month_with_change = (
-            f"[bold red]${profile_data['current_month']:.2f}[/]{change_text}"
+            f"[bold red]{current_month_formatted}[/]{change_text}"
         )
+
+        # Convert and format service costs
+        service_costs_formatted = []
+        for service_cost in profile_data["service_costs_formatted"]:
+            # Extract service name and cost value
+            if ": $" in service_cost:
+                service_name, cost_str = service_cost.split(": $")
+                cost_value = float(cost_str)
+                converted_cost = convert_currency(cost_value, "USD", currency)
+                formatted_cost = format_currency(converted_cost, currency)
+                service_costs_formatted.append(f"{service_name}: {formatted_cost}")
+            else:
+                service_costs_formatted.append(service_cost)
+        
+        # Convert and format budget info
+        budget_info_formatted = []
+        for budget_item in profile_data["budget_info"]:
+            if " limit: $" in budget_item:
+                budget_name, limit_str = budget_item.split(" limit: $")
+                limit_value = float(limit_str)
+                converted_limit = convert_currency(limit_value, "USD", currency)
+                formatted_limit = format_currency(converted_limit, currency)
+                budget_info_formatted.append(f"{budget_name} limit: {formatted_limit}")
+            elif " actual: $" in budget_item:
+                budget_name, actual_str = budget_item.split(" actual: $")
+                actual_value = float(actual_str)
+                converted_actual = convert_currency(actual_value, "USD", currency)
+                formatted_actual = format_currency(converted_actual, currency)
+                budget_info_formatted.append(f"{budget_name} actual: {formatted_actual}")
+            elif " forecast: $" in budget_item:
+                budget_name, forecast_str = budget_item.split(" forecast: $")
+                forecast_value = float(forecast_str)
+                converted_forecast = convert_currency(forecast_value, "USD", currency)
+                formatted_forecast = format_currency(converted_forecast, currency)
+                budget_info_formatted.append(f"{budget_name} forecast: {formatted_forecast}")
+            else:
+                budget_info_formatted.append(budget_item)
 
         table.add_row(
             f"[bright_magenta]Profile: {profile_data['profile']}\nAccount: {profile_data['account_id']}[/]",
-            f"[bold red]${profile_data['last_month']:.2f}[/]",
+            f"[bold red]{last_month_formatted}[/]",
             current_month_with_change,
             "[bright_green]"
-            + "\n".join(profile_data["service_costs_formatted"])
+            + "\n".join(service_costs_formatted)
             + "[/]",
-            "[bright_yellow]" + "\n\n".join(profile_data["budget_info"]) + "[/]",
+            "[bright_yellow]" + "\n\n".join(budget_info_formatted) + "[/]",
             "\n".join(profile_data["ec2_summary_formatted"]),
         )
     else:
@@ -438,7 +449,7 @@ def _generate_dashboard_data(
                     profiles_list[0], user_regions, time_range, args.tag
                 )
             export_data.append(profile_data)
-            add_profile_to_table(table, profile_data)
+            add_profile_to_table(table, profile_data, args.currency)
     else:
         for profile in track(
             profiles_to_use, description="[bright_cyan]Fetching cost data..."
@@ -447,7 +458,7 @@ def _generate_dashboard_data(
                 profile, user_regions, time_range, args.tag
             )
             export_data.append(profile_data)
-            add_profile_to_table(table, profile_data)
+            add_profile_to_table(table, profile_data, args.currency)
     return export_data
 
 
@@ -457,39 +468,48 @@ def _export_dashboard_reports(
     previous_period_dates: str,
     current_period_dates: str,
 ) -> None:
-    """Export dashboard data to specified formats."""
-    if args.report_name and args.report_type:
-        for report_type in args.report_type:
-            if report_type == "csv":
-                csv_path = export_to_csv(
-                    export_data,
-                    args.report_name,
-                    args.dir,
-                    previous_period_dates=previous_period_dates,
-                    current_period_dates=current_period_dates,
-                )
-                if csv_path:
-                    console.print(
-                        f"[bright_green]Successfully exported to CSV format: {csv_path}[/]"
-                    )
-            elif report_type == "json":
-                json_path = export_to_json(export_data, args.report_name, args.dir)
-                if json_path:
-                    console.print(
-                        f"[bright_green]Successfully exported to JSON format: {json_path}[/]"
-                    )
-            elif report_type == "pdf":
-                pdf_path = export_cost_dashboard_to_pdf(
-                    export_data,
-                    args.report_name,
-                    args.dir,
-                    previous_period_dates=previous_period_dates,
-                    current_period_dates=current_period_dates,
-                )
-                if pdf_path:
-                    console.print(
-                        f"[bright_green]Successfully exported to PDF format: {pdf_path}[/]"
-                    )
+    """Export dashboard data to report files."""
+    if not args.report_name or not args.report_type:
+        return
+
+    from aws_finops_dashboard.helpers import (
+        export_cost_dashboard_to_csv,
+        export_cost_dashboard_to_json,
+        export_cost_dashboard_to_pdf,
+    )
+
+    if "csv" in args.report_type:
+        csv_path = export_cost_dashboard_to_csv(
+            export_data, args.report_name, args.dir
+        )
+        if csv_path:
+            console.print(
+                f"[bright_green]Report exported to CSV: {csv_path}[/]"
+            )
+
+    if "json" in args.report_type:
+        json_path = export_cost_dashboard_to_json(
+            export_data, args.report_name, args.dir
+        )
+        if json_path:
+            console.print(
+                f"[bright_green]Report exported to JSON: {json_path}[/]"
+            )
+
+    if "pdf" in args.report_type:
+        pdf_path = export_cost_dashboard_to_pdf(
+            export_data,
+            args.report_name,
+            args.dir,
+            previous_period_dates,
+            current_period_dates,
+            args.currency,
+            args.enhanced_pdf,
+        )
+        if pdf_path:
+            console.print(
+                f"[bright_green]Report exported to PDF: {pdf_path}[/]"
+            )
 
 
 def _run_anomaly_detection(profiles_to_use: List[str], args: argparse.Namespace) -> None:
@@ -741,7 +761,7 @@ def run_dashboard(args: argparse.Namespace) -> int:
     """Main function to run the AWS FinOps dashboard."""
     try:
         with Status("[bright_cyan]Initialising...", spinner="aesthetic", speed=0.4):
-            profiles_to_use, user_regions, time_range = _initialize_profiles(args)
+            profiles_to_use, user_regions, time_range, currency = _initialize_profiles(args)
 
         if args.audit:
             _run_audit_report(profiles_to_use, args)

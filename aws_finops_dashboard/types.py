@@ -60,6 +60,7 @@ class CLIArgs(TypedDict, total=False):
     report_type: Optional[List[str]]
     dir: Optional[str]
     time_range: Optional[int]
+    currency: Optional[str]
 
 
 # Anomaly Detection Types
