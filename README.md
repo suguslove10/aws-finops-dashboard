@@ -5,7 +5,7 @@
 [![GitHub stars](https://img.shields.io/github/stars/ravikiranvm/aws-finops-dashboard.svg)](https://github.com/ravikiranvm/aws-finops-dashboard/stargazers)
 [![Downloads](https://static.pepy.tech/badge/aws-finops-dashboard)](https://pepy.tech/project/aws-finops-dashboard)
 
-The AWS FinOps Dashboard is an open-source, Python-based command-line tool (built with the Rich library) for AWS cost monitoring. It provides multi-account cost summaries by time period, service, and cost allocation tags; budget limits vs. actuals; EC2 instance status; six‑month cost trend charts; and “FinOps audit” reports (e.g. untagged or idle resources). It can export data to CSV/JSON/PDF.
+The AWS FinOps Dashboard is an open-source, Python-based command-line tool (built with the Rich library) for AWS cost monitoring. It provides multi-account cost summaries by time period, service, and cost allocation tags; budget limits vs. actuals; EC2 instance status; six‑month cost trend charts; and "FinOps audit" reports (e.g. untagged or idle resources). It can export data to CSV/JSON/PDF.
 
 ## Why AWS FinOps Dashboard?
 
@@ -68,6 +68,8 @@ Key features include:
   - **Note**: Trend reports (generated via `--trend`) currently only support JSON export. Other formats specified in `--report-type` will be ignored for these reports.
 - **Improved Error Handling**: Resilient and user-friendly error messages
 - **Beautiful Terminal UI**: Styled with the Rich library for a visually appealing experience
+- **ML-Based Anomaly Detection**: Automatically identify unusual spending patterns
+- **AI-Powered Cost Optimization**: Get smart recommendations for cost savings based on usage patterns
 
 ---
 
@@ -175,6 +177,12 @@ aws-finops [options]
 | `--time-range`, `-t` | Time range for cost data in days (default: current month). Examples: 7, 30, 90. |
 | `--trend` | View cost trend analysis for the last 6 months. |
 | `--audit` | View list of untagged, unused resoruces and budget breaches. |
+| `--detect-anomalies` | Run machine learning-based anomaly detection to identify unusual spending patterns. |
+| `--anomaly-sensitivity` | Sensitivity for anomaly detection (0.01-0.1, lower values are more sensitive, default: 0.05). |
+| `--optimize` | Generate AI-powered cost optimization recommendations. |
+| `--cpu-threshold` | CPU utilization threshold for EC2 right-sizing recommendations (percent, default: 40.0). |
+| `--skip-ri-analysis` | Skip Reserved Instance analysis when generating optimization recommendations. |
+| `--skip-savings-plans` | Skip Savings Plans analysis when generating optimization recommendations. |
 
 ### Examples
 
@@ -231,6 +239,21 @@ aws-finops -p dev -r us-east-1 --audit -n Dev_Audit_Report -y pdf
 aws-finops --config-file path/to/your_config.toml
 # or
 aws-finops -C path/to/your_config.yaml
+
+# View anomaly detection for all profiles
+aws-finops --all --detect-anomalies
+
+# View anomaly detection with custom sensitivity
+aws-finops --profiles dev prod --detect-anomalies --anomaly-sensitivity 0.03
+
+# Get cost optimization recommendations for all profiles
+aws-finops --all --optimize
+
+# Get cost optimization recommendations with custom CPU threshold
+aws-finops --profiles dev prod --optimize --cpu-threshold 30.0
+
+# Get cost optimization recommendations without Reserved Instance analysis
+aws-finops --all --optimize --skip-ri-analysis
 ```
 
 You'll see a live-updating table of your AWS account cost and usage details in the terminal. If export options are specified, a report file will also be generated upon completion.

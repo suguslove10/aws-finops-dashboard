@@ -92,6 +92,96 @@ def get_trend(session: Session, tag: Optional[List[str]] = None) -> Dict[str, An
     }
 
 
+def get_detailed_cost_data(
+    session: Session,
+    time_range: int = 90,
+    tag: Optional[List[str]] = None,
+    granularity: str = "DAILY"
+) -> List[Dict[str, Any]]:
+    """
+    Get detailed cost data for anomaly detection or advanced analysis.
+    
+    Args:
+        session: The boto3 session to use
+        time_range: Number of days of historical data (default: 90 days)
+        tag: Optional list of tags in "Key=Value" format to filter resources
+        granularity: Granularity of data (DAILY, MONTHLY, etc.)
+        
+    Returns:
+        List of daily cost data with service breakdown
+    """
+    ce = session.client("ce")
+    
+    tag_filters: List[Dict[str, Any]] = []
+    if tag:
+        for t in tag:
+            key, value = t.split("=", 1)
+            tag_filters.append({"Key": key, "Values": [value]})
+
+    filter_param: Optional[Dict[str, Any]] = None
+    if tag_filters:
+        if len(tag_filters) == 1:
+            filter_param = {
+                "Tags": {
+                    "Key": tag_filters[0]["Key"],
+                    "Values": tag_filters[0]["Values"],
+                    "MatchOptions": ["EQUALS"],
+                }
+            }
+        else:
+            filter_param = {
+                "And": [
+                    {
+                        "Tags": {
+                            "Key": f["Key"],
+                            "Values": f["Values"],
+                            "MatchOptions": ["EQUALS"],
+                        }
+                    }
+                    for f in tag_filters
+                ]
+            }
+    
+    kwargs = {}
+    if filter_param:
+        kwargs["Filter"] = filter_param
+    
+    end_date = date.today()
+    start_date = end_date - timedelta(days=time_range)
+    
+    detailed_data = []
+    
+    try:
+        # Get cost by service
+        response = ce.get_cost_and_usage(
+            TimePeriod={"Start": start_date.isoformat(), "End": end_date.isoformat()},
+            Granularity=granularity,
+            Metrics=["UnblendedCost"],
+            GroupBy=[{"Type": "DIMENSION", "Key": "SERVICE"}],
+            **kwargs
+        )
+        
+        for result in response.get("ResultsByTime", []):
+            day_data = {
+                "date": result["TimePeriod"]["Start"],
+                "services": {}
+            }
+            
+            for group in result.get("Groups", []):
+                service_name = group["Keys"][0]
+                cost = float(group["Metrics"]["UnblendedCost"]["Amount"])
+                day_data["services"][service_name] = cost
+            
+            day_data["total"] = float(result.get("Total", {}).get("UnblendedCost", {}).get("Amount", 0))
+            detailed_data.append(day_data)
+        
+        return detailed_data
+    
+    except Exception as e:
+        console.log(f"[yellow]Error getting detailed cost data: {e}[/]")
+        return []
+
+
 def get_cost_data(
     session: Session,
     time_range: Optional[int] = None,

@@ -1,6 +1,8 @@
 import argparse
 from collections import defaultdict
 from typing import Any, Dict, List, Optional, Tuple
+import os
+import json
 
 import boto3
 from rich import box
@@ -39,6 +41,8 @@ from aws_finops_dashboard.profile_processor import (
 )
 from aws_finops_dashboard.types import ProfileData
 from aws_finops_dashboard.visualisations import create_trend_bars
+from aws_finops_dashboard.anomaly_detection import detect_anomalies
+from aws_finops_dashboard.optimization_recommendations import generate_optimization_recommendations
 
 console = Console()
 
@@ -488,42 +492,306 @@ def _export_dashboard_reports(
                     )
 
 
+def _run_anomaly_detection(profiles_to_use: List[str], args: argparse.Namespace) -> None:
+    """Run anomaly detection on AWS cost data."""
+    console.print("[bold bright_cyan]Running ML-based anomaly detection on AWS cost data...[/]")
+    
+    from rich import box
+    from rich.table import Table
+    
+    for profile in track(profiles_to_use, description="Analyzing profiles for anomalies..."):
+        console.print(f"[bold bright_magenta]Analyzing profile: {profile}[/]")
+        
+        session = boto3.Session(profile_name=profile)
+        account_id = get_account_id(session) or "Unknown"
+        
+        # Run anomaly detection
+        result = detect_anomalies(
+            session=session,
+            days=args.time_range or 90,
+            tag=args.tag,
+            sensitivity=args.anomaly_sensitivity
+        )
+        
+        if not result["anomalies"]:
+            console.print(f"[green]No significant anomalies detected for profile {profile}.[/]")
+            continue
+        
+        # Create table to display the results
+        anomaly_table = Table(
+            title=f"Cost Anomalies for {profile} (Account: {account_id})",
+            box=box.ASCII_DOUBLE_HEAD,
+            style="bright_cyan",
+            show_lines=True
+        )
+        
+        anomaly_table.add_column("Service", style="bold magenta")
+        anomaly_table.add_column("Date", style="cyan")
+        anomaly_table.add_column("Amount ($)", justify="right", style="green")
+        anomaly_table.add_column("Baseline ($)", justify="right", style="blue")
+        anomaly_table.add_column("Deviation", justify="right", style="yellow")
+        
+        for service, anomalies in result["anomalies"].items():
+            for anomaly in anomalies:
+                anomaly_table.add_row(
+                    service,
+                    anomaly["date"],
+                    f"{anomaly['amount']:.2f}",
+                    f"{anomaly['baseline']:.2f}",
+                    f"{anomaly['deviation']:.1f}x"
+                )
+        
+        console.print(anomaly_table)
+        
+        # Print summary
+        summary = result["summary"]
+        console.print(f"[bold cyan]Summary for {profile}:[/]")
+        console.print(f"• Total anomalies detected: [bold]{summary['total_anomalies']}[/]")
+        console.print(f"• Services with anomalies: [bold]{summary['services_with_anomalies']}/{summary['total_services_analyzed']}[/]")
+        console.print(f"• Highest cost deviation: [bold]{summary['highest_deviation']:.1f}x[/]")
+        
+        if args.report_name and "json" in args.report_type:
+            # Export anomaly data to JSON
+            output_dir = args.dir or "."
+            filename = f"{args.report_name}_{profile}_anomalies.json"
+            filepath = os.path.join(output_dir, filename)
+            
+            try:
+                os.makedirs(output_dir, exist_ok=True)
+                with open(filepath, "w") as f:
+                    json.dump(result, f, indent=2)
+                console.print(f"[green]Anomaly data exported to {filepath}[/]")
+            except Exception as e:
+                console.print(f"[red]Error exporting anomaly data: {str(e)}[/]")
+
+
+def _run_optimization_recommendations(profiles_to_use: List[str], args: argparse.Namespace) -> None:
+    """Generate cost optimization recommendations."""
+    console.print("[bold bright_cyan]Generating AI-powered cost optimization recommendations...[/]")
+    
+    from rich import box
+    from rich.table import Table
+    
+    for profile in track(profiles_to_use, description="Analyzing profiles for optimization opportunities..."):
+        console.print(f"[bold bright_magenta]Analyzing profile: {profile}[/]")
+        
+        session = boto3.Session(profile_name=profile)
+        account_id = get_account_id(session) or "Unknown"
+        
+        # Generate optimization recommendations
+        result = generate_optimization_recommendations(
+            session=session,
+            analyze_ec2=True,
+            analyze_resources=True,
+            analyze_reservations=not args.skip_ri_analysis,
+            analyze_savings_plans=not args.skip_savings_plans,
+            regions=args.regions,
+            cpu_threshold=args.cpu_threshold
+        )
+        
+        # Check if we have any recommendations
+        has_recommendations = (
+            result["ec2_recommendations"] or
+            result["resource_recommendations"] or
+            result["ri_recommendations"] or
+            result["savings_plans_recommendations"]
+        )
+        
+        if not has_recommendations:
+            console.print(f"[green]No optimization opportunities found for profile {profile}.[/]")
+            continue
+        
+        # Display EC2 right-sizing recommendations
+        if result["ec2_recommendations"]:
+            ec2_table = Table(
+                title=f"EC2 Right-Sizing Recommendations for {profile} (Account: {account_id})",
+                box=box.ASCII_DOUBLE_HEAD,
+                style="bright_cyan",
+                show_lines=True
+            )
+            
+            ec2_table.add_column("Instance ID")
+            ec2_table.add_column("Name")
+            ec2_table.add_column("Region")
+            ec2_table.add_column("Current Type")
+            ec2_table.add_column("Recommended")
+            ec2_table.add_column("Avg CPU", justify="right")
+            ec2_table.add_column("Monthly Savings", justify="right")
+            
+            for rec in result["ec2_recommendations"]:
+                ec2_table.add_row(
+                    rec["resource_id"],
+                    rec["resource_name"] or "-",
+                    rec["region"],
+                    rec["current_type"],
+                    f"[bold green]{rec['recommended_type']}[/]",
+                    f"{rec['metrics']['avg_cpu']:.1f}%",
+                    f"[bold]${rec['savings']:.2f}[/]"
+                )
+            
+            console.print(ec2_table)
+        
+        # Display unused resource recommendations
+        if result["resource_recommendations"]:
+            resource_table = Table(
+                title=f"Unused Resource Recommendations for {profile} (Account: {account_id})",
+                box=box.ASCII_DOUBLE_HEAD,
+                style="bright_cyan",
+                show_lines=True
+            )
+            
+            resource_table.add_column("Resource Type")
+            resource_table.add_column("Resource ID")
+            resource_table.add_column("Region")
+            resource_table.add_column("Recommendation")
+            resource_table.add_column("Monthly Savings", justify="right")
+            
+            for rec in result["resource_recommendations"]:
+                resource_table.add_row(
+                    rec["resource_type"],
+                    rec["resource_id"],
+                    rec["region"],
+                    rec["recommendation"],
+                    f"[bold]${rec['savings']:.2f}[/]"
+                )
+            
+            console.print(resource_table)
+        
+        # Display Reserved Instance recommendations
+        if result["ri_recommendations"]:
+            ri_table = Table(
+                title=f"Reserved Instance Recommendations for {profile} (Account: {account_id})",
+                box=box.ASCII_DOUBLE_HEAD,
+                style="bright_cyan",
+                show_lines=True
+            )
+            
+            ri_table.add_column("Instance Type")
+            ri_table.add_column("Count")
+            ri_table.add_column("Term")
+            ri_table.add_column("Payment Option")
+            ri_table.add_column("Monthly Savings", justify="right")
+            
+            for rec in result["ri_recommendations"]:
+                ri_table.add_row(
+                    rec["instance_type"],
+                    str(rec["recommended_count"]),
+                    rec["term"],
+                    rec["payment_option"],
+                    f"[bold]${rec['monthly_savings']:.2f}[/]"
+                )
+            
+            console.print(ri_table)
+        
+        # Display Savings Plans recommendations
+        if result["savings_plans_recommendations"]:
+            sp_table = Table(
+                title=f"Savings Plans Recommendations for {profile} (Account: {account_id})",
+                box=box.ASCII_DOUBLE_HEAD,
+                style="bright_cyan",
+                show_lines=True
+            )
+            
+            sp_table.add_column("Plan Type")
+            sp_table.add_column("Hourly Commitment")
+            sp_table.add_column("Term")
+            sp_table.add_column("Payment Option")
+            sp_table.add_column("Monthly Savings", justify="right")
+            
+            for rec in result["savings_plans_recommendations"]:
+                sp_table.add_row(
+                    rec["plan_type"],
+                    f"${rec['hourly_commitment']:.2f}/hr",
+                    rec["term"],
+                    rec["payment_option"],
+                    f"[bold]${rec['monthly_savings']:.2f}[/]"
+                )
+            
+            console.print(sp_table)
+        
+        # Print summary
+        summary = result["summary"]
+        console.print(f"[bold cyan]Summary for {profile}:[/]")
+        console.print(f"• Total potential monthly savings: [bold]${summary['total_potential_savings']:.2f}[/]")
+        if summary["ec2_savings"] > 0:
+            console.print(f"• EC2 right-sizing savings: [bold]${summary['ec2_savings']:.2f}[/]")
+        if summary["resource_savings"] > 0:
+            console.print(f"• Unused resource savings: [bold]${summary['resource_savings']:.2f}[/]")
+        if summary["ri_savings"] > 0:
+            console.print(f"• Reserved Instance savings: [bold]${summary['ri_savings']:.2f}[/]")
+        if summary["savings_plans_savings"] > 0:
+            console.print(f"• Savings Plans savings: [bold]${summary['savings_plans_savings']:.2f}[/]")
+        
+        if args.report_name and "json" in args.report_type:
+            # Export optimization data to JSON
+            output_dir = args.dir or "."
+            filename = f"{args.report_name}_{profile}_optimization.json"
+            filepath = os.path.join(output_dir, filename)
+            
+            try:
+                os.makedirs(output_dir, exist_ok=True)
+                with open(filepath, "w") as f:
+                    json.dump(result, f, indent=2)
+                console.print(f"[green]Optimization data exported to {filepath}[/]")
+            except Exception as e:
+                console.print(f"[red]Error exporting optimization data: {str(e)}[/]")
+
+
 def run_dashboard(args: argparse.Namespace) -> int:
     """Main function to run the AWS FinOps dashboard."""
-    with Status("[bright_cyan]Initialising...", spinner="aesthetic", speed=0.4):
-        profiles_to_use, user_regions, time_range = _initialize_profiles(args)
+    try:
+        with Status("[bright_cyan]Initialising...", spinner="aesthetic", speed=0.4):
+            profiles_to_use, user_regions, time_range = _initialize_profiles(args)
 
-    if args.audit:
-        _run_audit_report(profiles_to_use, args)
-        return 0
+        if args.audit:
+            _run_audit_report(profiles_to_use, args)
+            return 0
 
-    if args.trend:
-        _run_trend_analysis(profiles_to_use, args)
-        return 0
+        if args.trend:
+            _run_trend_analysis(profiles_to_use, args)
+            return 0
+            
+        if args.detect_anomalies:
+            _run_anomaly_detection(profiles_to_use, args)
+            return 0
+            
+        if args.optimize:
+            _run_optimization_recommendations(profiles_to_use, args)
+            return 0
 
-    with Status(
-        "[bright_cyan]Initialising dashboard...", spinner="aesthetic", speed=0.4
-    ):
-        (
-            previous_period_name,
-            current_period_name,
-            previous_period_dates,
-            current_period_dates,
-        ) = _get_display_table_period_info(profiles_to_use, time_range)
+        with Status(
+            "[bright_cyan]Initialising dashboard...", spinner="aesthetic", speed=0.4
+        ):
+            (
+                previous_period_name,
+                current_period_name,
+                previous_period_dates,
+                current_period_dates,
+            ) = _get_display_table_period_info(profiles_to_use, time_range)
 
-        table = create_display_table(
-            previous_period_dates,
-            current_period_dates,
-            previous_period_name,
-            current_period_name,
+            table = create_display_table(
+                previous_period_dates,
+                current_period_dates,
+                previous_period_name,
+                current_period_name,
+            )
+
+            export_data = _generate_dashboard_data(
+                profiles_to_use, user_regions, time_range, args, table
+            )
+            
+        console.print(table)
+        
+        _export_dashboard_reports(
+            export_data, args, previous_period_dates, current_period_dates
         )
 
-    export_data = _generate_dashboard_data(
-        profiles_to_use, user_regions, time_range, args, table
-    )
-    console.print(table)
-    _export_dashboard_reports(
-        export_data, args, previous_period_dates, current_period_dates
-    )
-
-    return 0
+        return 0
+    except KeyboardInterrupt:
+        console.print("[bold red]Operation cancelled by user.[/]")
+        return 1
+    except Exception as e:
+        console.print(f"[bold red]Error running dashboard: {str(e)}[/]")
+        import traceback
+        console.print(traceback.format_exc())
+        return 1

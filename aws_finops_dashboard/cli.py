@@ -10,7 +10,7 @@ from aws_finops_dashboard.helpers import load_config_file
 
 console = Console()
 
-__version__ = "2.2.7"
+__version__ = "2.3.0"
 
 
 def welcome_banner() -> None:
@@ -133,6 +133,38 @@ def main() -> int:
         "--audit",
         action="store_true",
         help="Display an audit report with cost anomalies, stopped EC2 instances, unused EBS columes, budget alerts, and more",
+    )
+    parser.add_argument(
+        "--detect-anomalies",
+        action="store_true",
+        help="Detect unusual spending patterns using machine learning",
+    )
+    parser.add_argument(
+        "--anomaly-sensitivity",
+        type=float,
+        default=0.05,
+        help="Sensitivity for anomaly detection (0.01-0.1, lower values are more sensitive)",
+    )
+    parser.add_argument(
+        "--optimize",
+        action="store_true",
+        help="Generate AI-powered cost optimization recommendations",
+    )
+    parser.add_argument(
+        "--cpu-threshold",
+        type=float,
+        default=40.0,
+        help="CPU utilization threshold for EC2 right-sizing recommendations (percent)",
+    )
+    parser.add_argument(
+        "--skip-ri-analysis",
+        action="store_true",
+        help="Skip Reserved Instance analysis when generating optimization recommendations",
+    )
+    parser.add_argument(
+        "--skip-savings-plans",
+        action="store_true",
+        help="Skip Savings Plans analysis when generating optimization recommendations",
     )
 
     args = parser.parse_args()
