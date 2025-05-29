@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Card, Title, Badge, Button } from '@tremor/react';
 import { useQuery } from '@tanstack/react-query';
-import { fetchTaskStatus, getDownloadUrl, TaskResult } from '@/lib/api';
+import { fetchTaskStatus, getDownloadUrl, TaskResult, convertCurrency, formatCurrency } from '@/lib/api';
 import { FaDownload, FaSync, FaCheckCircle, FaExclamationTriangle, FaSpinner, FaExternalLinkAlt, FaFilePdf, FaFileCsv, FaFileAlt, FaFile } from 'react-icons/fa';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Terminal } from '@xterm/xterm';
@@ -19,6 +19,15 @@ export function TaskOutput({ taskType, onViewResults }: TaskOutputProps) {
   const xtermRef = useRef<Terminal | null>(null);
   const [isTerminalReady, setIsTerminalReady] = useState(false);
   const [lastOutput, setLastOutput] = useState('');
+  const [selectedCurrency, setSelectedCurrency] = useState<string>('USD');
+  
+  // Get the selected currency from localStorage
+  useEffect(() => {
+    const storedCurrency = localStorage.getItem('selectedCurrency');
+    if (storedCurrency) {
+      setSelectedCurrency(storedCurrency);
+    }
+  }, []);
   
   const { data, isLoading, error, refetch } = useQuery<TaskResult>({
     queryKey: ['taskStatus', taskType],
@@ -331,26 +340,40 @@ export function TaskOutput({ taskType, onViewResults }: TaskOutputProps) {
                     </tr>
                   </thead>
                   <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
-                    {extractEc2TableData(output).map((row, index) => (
-                      <tr key={index} className={index % 2 === 0 ? 'bg-white dark:bg-gray-900' : 'bg-gray-50 dark:bg-gray-800'}>
-                        <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 font-mono">{row.id}</td>
-                        <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{row.name}</td>
-                        <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{row.region}</td>
-                        <td className="px-4 py-3 text-sm">
-                          <span className={`px-2 py-1 rounded-full text-xs ${
-                            row.state === 'running' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 
-                            row.state === 'stopped' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' : 
-                            row.state.startsWith('underutil') ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' :
-                            'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
-                          }`}>
-                            {row.state}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{row.usage}</td>
-                        <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{row.cost}</td>
-                        <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">{row.recommendation}</td>
-                      </tr>
-                    ))}
+                    {extractEc2TableData(output).map((row, index) => {
+                      // Try to extract cost value and convert it if needed
+                      let costValue = 0;
+                      if (row.cost && row.cost.startsWith('$')) {
+                        costValue = parseFloat(row.cost.substring(1));
+                        // Convert from USD to selected currency
+                        if (selectedCurrency !== 'USD') {
+                          costValue = convertCurrency(costValue, 'USD', selectedCurrency);
+                        }
+                      }
+                      
+                      return (
+                        <tr key={index} className={index % 2 === 0 ? 'bg-white dark:bg-gray-900' : 'bg-gray-50 dark:bg-gray-800'}>
+                          <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 font-mono">{row.id}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{row.name}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{row.region}</td>
+                          <td className="px-4 py-3 text-sm">
+                            <span className={`px-2 py-1 rounded-full text-xs ${
+                              row.state === 'running' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 
+                              row.state === 'stopped' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' : 
+                              row.state.startsWith('underutil') ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' :
+                              'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
+                            }`}>
+                              {row.state}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{row.usage}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
+                            {costValue > 0 ? formatCurrency(costValue, selectedCurrency) : row.cost}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">{row.recommendation}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -361,12 +384,24 @@ export function TaskOutput({ taskType, onViewResults }: TaskOutputProps) {
           {output.includes('Summary:') && (
             <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800/50">
               <h3 className="text-lg font-semibold mb-2 text-blue-900 dark:text-blue-300">Summary</h3>
-              {extractSummaryData(output).map((item, index) => (
-                <div key={index} className="flex justify-between py-2 border-b border-blue-200 dark:border-blue-800/50 last:border-0">
-                  <span className="text-gray-700 dark:text-gray-300">{item.label}</span>
-                  <span className="font-semibold text-blue-700 dark:text-blue-300">{item.value}</span>
-                </div>
-              ))}
+              {extractSummaryData(output).map((item, index) => {
+                // Try to convert currency values in summary if they contain dollar amounts
+                let displayValue = item.value;
+                if (item.label.toLowerCase().includes('savings') && typeof item.value === 'string' && item.value.includes('$')) {
+                  const numValue = parseFloat(item.value.replace('$', ''));
+                  if (!isNaN(numValue)) {
+                    const convertedValue = convertCurrency(numValue, 'USD', selectedCurrency);
+                    displayValue = formatCurrency(convertedValue, selectedCurrency);
+                  }
+                }
+                
+                return (
+                  <div key={index} className="flex justify-between py-2 border-b border-blue-200 dark:border-blue-800/50 last:border-0">
+                    <span className="text-gray-700 dark:text-gray-300">{item.label}</span>
+                    <span className="font-semibold text-blue-700 dark:text-blue-300">{displayValue}</span>
+                  </div>
+                );
+              })}
             </div>
           )}
         </>

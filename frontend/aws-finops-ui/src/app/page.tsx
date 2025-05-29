@@ -9,7 +9,7 @@ import { RegionSelector } from '@/components/RegionSelector';
 import { CurrencySelector } from '@/components/CurrencySelector';
 import { TagSelector } from '@/components/TagSelector';
 import { TaskOutput } from '@/components/TaskOutput';
-import { ResourceAnalyzerOptions } from '@/components/ResourceAnalyzerOptions';
+import ResourceAnalyzerOptions from '@/components/ResourceAnalyzerOptions';
 import { Task, runTask } from '@/lib/api';
 import { Button, Card, Title, Text, Switch } from '@tremor/react';
 import { motion } from 'framer-motion';
@@ -393,10 +393,12 @@ export default function Home() {
                           
                           {selectedTask?.id === 'resource_analyzer' ? (
                             <ResourceAnalyzerOptions 
-                              cpuThreshold={cpuThreshold}
-                              setCpuThreshold={setCpuThreshold}
-                              lookbackDays={lookbackDays}
-                              setLookbackDays={setLookbackDays}
+                              onSubmit={(options) => {
+                                setCpuThreshold(options.cpuThreshold);
+                                setLookbackDays(options.lookbackPeriod);
+                                setSelectedCurrency(options.currency);
+                                runTaskHandler();
+                              }}
                             />
                           ) : (
                             <>
