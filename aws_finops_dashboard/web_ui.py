@@ -193,95 +193,91 @@ def escape_html(text):
     )
 
 
-def run_task_thread(args, task_type):
-    """Run a task in a separate thread and capture its output."""
-    global task_results
+def run_task_thread(args, task_type, env=None):
+    """Run a dashboard task in a separate thread."""
+    from io import StringIO
+    import sys
     
-    class AnsiPreservingStringIO(StringIO):
-        def write(self, text):
-            # This preserves ANSI escape codes in the output
-            return super().write(text)
+    # Create a StringIO object to capture the output
+    output_capture = StringIO()
+    original_stdout = sys.stdout
+    sys.stdout = output_capture
     
     try:
-        # Initialize task result with a nicer starting message
+        # Set task as running
         task_results[task_type] = {
             'status': 'running',
-            'output': f'\x1b[34;1mStarting {task_type} task...\x1b[0m\n' +
-                      f'\x1b[36mTask is initializing, please wait...\x1b[0m\n',
+            'output': 'Starting task...',
             'files': []
         }
         
-        # Capture stdout
-        old_stdout = sys.stdout
-        output_capture = AnsiPreservingStringIO()
-        sys.stdout = output_capture
-        
-        # Update status with more information
-        task_results[task_type]['output'] += f'\x1b[36mInitializing AWS resources...\x1b[0m\n'
-        
-        # Run appropriate task
-        if task_type == 'ri_optimizer':
-            task_results[task_type]['output'] += f'\x1b[36mStarting Reserved Instance Optimizer...\x1b[0m\n'
-            optimizer = RIOptimizer(
-                profiles=args.profiles,
-                use_all_profiles=args.all,
-                lookback_days=args.lookback_days,
-                output_dir=args.dir,
-                report_name=args.report_name,
-                report_format=args.report_type
-            )
-            optimizer.run()
+        # Run the task
+        if task_type == 'dashboard':
+            result = run_dashboard(args)
+        elif task_type == 'trend':
+            args.trend = True
+            result = run_dashboard(args)
+        elif task_type == 'audit':
+            args.audit = True
+            result = run_dashboard(args)
+        elif task_type == 'anomalies':
+            args.detect_anomalies = True
+            result = run_dashboard(args)
+        elif task_type == 'optimize':
+            args.optimize = True
+            result = run_dashboard(args)
+        elif task_type == 'ri_optimizer':
+            from aws_finops_dashboard.cli import run_ri_optimizer
+            run_ri_optimizer(args)
+            result = 0
         elif task_type == 'resource_analyzer':
-            task_results[task_type]['output'] += f'\x1b[36mStarting Unused Resource Analyzer...\x1b[0m\n'
-            analyzer = UnusedResourceAnalyzer(
-                profiles=args.profiles,
-                use_all_profiles=args.all,
-                regions=args.regions,
-                resource_types=args.resource_types,
-                output_dir=args.dir,
-                report_name=args.report_name,
-                report_format=args.report_type
-            )
-            analyzer.run()
+            from aws_finops_dashboard.cli import run_resource_analyzer
+            # Override environment variables if provided
+            if env:
+                old_environ = os.environ.copy()
+                os.environ.update(env)
+                try:
+                    run_resource_analyzer(args)
+                finally:
+                    os.environ = old_environ
+            else:
+                run_resource_analyzer(args)
+            result = 0
+        elif task_type == 'tag_analyzer':
+            args.tag_analyzer = True
+            result = run_dashboard(args)
         else:
-            # Run standard dashboard
-            task_results[task_type]['output'] += f'\x1b[36mRunning AWS FinOps Dashboard...\x1b[0m\n'
-            run_dashboard(args)
+            result = 1
+            print(f"Unknown task type: {task_type}")
         
-        # Restore stdout
-        sys.stdout = old_stdout
-        raw_output = output_capture.getvalue()
+        # Update task status
+        sys.stdout = original_stdout
         
-        # Get generated files
-        files = []
-        for fname in os.listdir(args.dir):
-            if os.path.isfile(os.path.join(args.dir, fname)) and args.report_name in fname:
-                files.append(fname)
+        # Check for generated files
+        generated_files = get_generated_files(args.dir)
         
-        # Add a completion message
-        completion_message = '\x1b[32;1m✅ Task completed successfully!\x1b[0m\n'
-        if files:
-            completion_message += '\x1b[34m📁 Files were generated. You can download them below.\x1b[0m\n'
-        
-        # Update task result
-        task_results[task_type] = {
-            'status': 'completed',
-            'output': completion_message + raw_output,
-            'files': files
-        }
-    
+        if result == 0:
+            task_results[task_type] = {
+                'status': 'completed',
+                'output': output_capture.getvalue(),
+                'files': generated_files
+            }
+        else:
+            task_results[task_type] = {
+                'status': 'error',
+                'output': output_capture.getvalue(),
+                'files': generated_files
+            }
     except Exception as e:
-        # Handle errors
-        sys.stdout = old_stdout if 'old_stdout' in locals() else sys.stdout
-        error_output = f'\x1b[31;1m❌ Error running {task_type} task: {str(e)}\x1b[0m\n'
-        if 'output_capture' in locals():
-            error_output += output_capture.getvalue()
+        # Handle any exceptions
+        sys.stdout = original_stdout
+        import traceback
+        error_output = f"Error: {str(e)}\n{traceback.format_exc()}"
         
-        # Update task result with error
         task_results[task_type] = {
             'status': 'error',
-            'output': error_output,
-            'files': []
+            'output': output_capture.getvalue() + "\n\n" + error_output,
+            'files': get_generated_files(args.dir)
         }
 
 
@@ -375,6 +371,18 @@ def main():
     
     args = parser.parse_args()
     run_server(host=args.host, port=args.port, debug=args.debug, open_browser=not args.no_browser)
+
+
+def get_generated_files(output_dir):
+    """Get a list of generated files in the output directory."""
+    files = []
+    try:
+        for fname in os.listdir(output_dir):
+            if os.path.isfile(os.path.join(output_dir, fname)):
+                files.append(fname)
+    except Exception:
+        pass
+    return files
 
 
 if __name__ == '__main__':

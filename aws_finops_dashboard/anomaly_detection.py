@@ -67,7 +67,7 @@ def detect_service_anomalies(
     
     Args:
         historical_data: Dictionary with service names as keys and daily cost lists as values
-        sensitivity: Contamination parameter for Isolation Forest (0.01 to 0.1)
+        sensitivity: Contamination parameter for Isolation Forest (0.01 to 0.5)
         
     Returns:
         Dictionary of services with detected anomalies (day index, cost, anomaly score)
@@ -135,7 +135,7 @@ def detect_anomalies(
         session: The boto3 session to use
         days: Number of days of historical data to analyze
         tag: Optional list of tags in "Key=Value" format to filter resources
-        sensitivity: How sensitive the anomaly detection should be (0.01-0.1)
+        sensitivity: How sensitive the anomaly detection should be (0.01-0.5)
         
     Returns:
         AnomalyResult containing detected anomalies and summary

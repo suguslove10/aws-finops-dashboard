@@ -241,11 +241,11 @@ def _run_trend_analysis(profiles_to_use: List[str], args: argparse.Namespace) ->
                 console.print(f"[bold red]Error creating session for profile {profile}[/]")
                 continue
 
-            # Get cost data with trend=True to get the past 6 months
-            cost_data = get_cost_data(session, tag=args.tag, get_trend=True)
+            # Get cost data with fetch_trend=True to get the past 6 months
+            cost_data = get_cost_data(session, tag=args.tag, fetch_trend=True)
             
-            # Display monthly cost trend
-            if cost_data["monthly_trend_data"]:
+            # Check if monthly_trend_data key exists and has data
+            if "monthly_trend_data" in cost_data and cost_data["monthly_trend_data"]:
                 create_trend_bars(cost_data["monthly_trend_data"], args.currency)
             else:
                 console.print("[yellow]No trend data available for this profile[/]")
@@ -254,7 +254,7 @@ def _run_trend_analysis(profiles_to_use: List[str], args: argparse.Namespace) ->
             if args.report_name and "json" in args.report_type:
                 trend_data = {
                     "profile": profile,
-                    "monthly_costs": cost_data["monthly_trend_data"],
+                    "monthly_costs": cost_data.get("monthly_trend_data", []),
                 }
                 export_trend_data_to_json(
                     trend_data, args.report_name, args.dir, args.currency
@@ -1195,8 +1195,8 @@ def _run_resource_analyzer(profiles_to_use: List[str], args: argparse.Namespace)
             # Create and run the analyzer
             analyzer = UnusedResourceAnalyzer(session, args.lookback_days or 14)
             
-            # Display results on console
-            analyzer.display_unused_resources(args.regions)
+            # Display results on console using the specified currency
+            analyzer.display_unused_resources(args.regions, args.currency)
             
             # Export results if report type and name are specified
             if args.report_type and args.report_name:
@@ -1207,7 +1207,8 @@ def _run_resource_analyzer(profiles_to_use: List[str], args: argparse.Namespace)
                         report_data,
                         output_format=report_type,
                         output_dir=args.dir,
-                        report_name=f"{args.report_name}_unused_resources_{profile}"
+                        report_name=f"{args.report_name}_unused_resources_{profile}",
+                        currency=args.currency  # Pass the currency parameter
                     )
                     console.print(f"[green]Report exported to: [bold]{output_file}[/bold][/]")
                 

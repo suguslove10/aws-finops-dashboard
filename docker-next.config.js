@@ -13,7 +13,11 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
   reactStrictMode: true,
-  swcMinify: true,
+  images: {
+    unoptimized: true,
+  },
+  // This is important for the standalone output to find assets correctly
+  assetPrefix: '',
 }
 
 module.exports = nextConfig; 

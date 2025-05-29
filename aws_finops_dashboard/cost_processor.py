@@ -186,7 +186,7 @@ def get_cost_data(
     session: Session,
     time_range: Optional[int] = None,
     tag: Optional[List[str]] = None,
-    get_trend: bool = False,
+    fetch_trend: bool = False,
 ) -> CostData:
     """
     Get cost data for an AWS account.
@@ -195,7 +195,7 @@ def get_cost_data(
         session: The boto3 session to use
         time_range: Optional time range in days for cost data (default: current month)
         tag: Optional list of tags in "Key=Value" format to filter resources.
-        get_trend: Optional boolean to get trend data for last 6 months (default).
+        fetch_trend: Optional boolean to get trend data for last 6 months (default).
 
     """
     ce = session.client("ce")
@@ -347,7 +347,8 @@ def get_cost_data(
         f"Previous {time_range} days cost" if time_range else "Last month's cost"
     )
 
-    return {
+    # Initialize the response dictionary
+    result = {
         "account_id": account_id,
         "current_month": current_period_cost,
         "last_month": previous_period_cost,
@@ -362,6 +363,15 @@ def get_cost_data(
         "previous_period_end": previous_period_end.isoformat(),
         "monthly_costs": None,
     }
+    
+    # Add trend data if requested
+    if fetch_trend:
+        trend_data = get_trend(session, tag)
+        result["monthly_trend_data"] = trend_data.get("monthly_costs", [])
+    else:
+        result["monthly_trend_data"] = []
+    
+    return result
 
 
 def process_service_costs(

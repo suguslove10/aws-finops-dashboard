@@ -207,12 +207,24 @@ def run_task():
         'resource_types': data.get('resource_types', ['all']),
         'lookback_days': int(data.get('lookback_days', 30)),
         'tag_analyzer': data.get('task_type') == 'tag_analyzer',
-        'config_file': None
+        'config_file': None,
+        'cpu_utilization_threshold': float(data.get('cpu_threshold', 5.0)), # Added for resource analyzer
+        'debug_mode': data.get('debug_mode', False) # Added for debug output
     })
 
     # Create a new thread to run the task
     task_type = data.get('task_type', 'dashboard')
-    task_thread = threading.Thread(target=run_task_thread, args=(args, task_type))
+    
+    # Set environment variable for debug mode if enabled
+    env = os.environ.copy()
+    if task_type == 'resource_analyzer' and data.get('debug_mode', False):
+        env['AWS_DEBUG'] = '1'
+    
+    task_thread = threading.Thread(
+        target=run_task_thread, 
+        args=(args, task_type), 
+        kwargs={'env': env}
+    )
     task_thread.daemon = True
     task_thread.start()
 

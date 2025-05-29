@@ -16,6 +16,8 @@ from reportlab.lib.pagesizes import letter, landscape
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
 
+from aws_finops_dashboard.helpers import convert_currency, format_currency, get_currency_symbol
+
 
 def export_to_json(data: Dict[str, Any], output_file: str) -> str:
     """
@@ -106,13 +108,14 @@ def export_to_csv(data: Dict[str, Any], output_file: str) -> str:
     return output_file
 
 
-def export_to_pdf(data: Dict[str, Any], output_file: str) -> str:
+def export_to_pdf(data: Dict[str, Any], output_file: str, currency: str = "USD") -> str:
     """
     Export unused resource data to PDF format.
     
     Args:
         data: Dictionary of unused resource data
         output_file: Destination file path
+        currency: Currency code (default: USD)
         
     Returns:
         Path to the exported file
@@ -152,13 +155,21 @@ def export_to_pdf(data: Dict[str, Any], output_file: str) -> str:
     monthly_savings = data.get('estimated_monthly_savings', 0)
     annual_savings = data.get('estimated_annual_savings', 0)
     
+    # Convert amounts to selected currency
+    monthly_savings = convert_currency(monthly_savings, "USD", currency)
+    annual_savings = convert_currency(annual_savings, "USD", currency)
+    
+    # Format with appropriate currency
+    monthly_savings_formatted = format_currency(monthly_savings, currency)
+    annual_savings_formatted = format_currency(annual_savings, currency)
+    
     summary_title = Paragraph("Summary", styles['Heading2'])
     elements.append(summary_title)
     
     summary_data = [
         ["Total Unused Resources", str(total_resources)],
-        ["Estimated Monthly Savings", f"${monthly_savings:.2f}"],
-        ["Estimated Annual Savings", f"${annual_savings:.2f}"]
+        ["Estimated Monthly Savings", monthly_savings_formatted],
+        ["Estimated Annual Savings", annual_savings_formatted]
     ]
     
     summary_table = Table(summary_data, colWidths=[200, 200])
@@ -180,20 +191,25 @@ def export_to_pdf(data: Dict[str, Any], output_file: str) -> str:
         ec2_title = Paragraph("Unused or Underutilized EC2 Instances", styles['Heading2'])
         elements.append(ec2_title)
         
-        ec2_data = [["Instance ID", "Name", "Region", "State", "Utilization/Days Unused", "Monthly Cost", "Recommendation"]]
+        ec2_data = [["Instance ID", "Name", "Region", "State", "Utilization", "Monthly Cost", "Recommendation"]]
         
         for instance in data.get('ec2_instances', []):
+            # Convert cost to selected currency
+            cost = convert_currency(instance['estimated_monthly_cost'], "USD", currency)
+            cost_formatted = format_currency(cost, currency)
+            
             ec2_data.append([
                 instance['resource_id'],
                 instance.get('name', 'Unnamed'),
                 instance['region'],
                 instance['state'],
                 instance.get('utilization', f"{instance['days_unused']} days"),
-                f"${instance['estimated_monthly_cost']:.2f}",
+                cost_formatted,
                 instance['recommendation']
             ])
         
-        ec2_table = Table(ec2_data, colWidths=[80, 80, 70, 70, 100, 70, 180])
+        # Adjust column widths for better formatting
+        ec2_table = Table(ec2_data, colWidths=[95, 70, 60, 60, 75, 75, 215])
         ec2_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
@@ -201,7 +217,9 @@ def export_to_pdf(data: Dict[str, Any], output_file: str) -> str:
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
             ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
             ('BACKGROUND', (0, 1), (-1, -1), colors.white),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('WORDWRAP', (0, 0), (-1, -1), True), # Enable word wrapping
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),  # Align content to top
         ]))
         
         elements.append(ec2_table)
@@ -215,6 +233,10 @@ def export_to_pdf(data: Dict[str, Any], output_file: str) -> str:
         ebs_data = [["Volume ID", "Name", "Region", "Size", "Type", "Days Unused", "Monthly Cost", "Recommendation"]]
         
         for volume in data.get('ebs_volumes', []):
+            # Convert cost to selected currency
+            cost = convert_currency(volume['estimated_monthly_cost'], "USD", currency)
+            cost_formatted = format_currency(cost, currency)
+            
             ebs_data.append([
                 volume['resource_id'],
                 volume.get('name', 'Unnamed'),
@@ -222,11 +244,12 @@ def export_to_pdf(data: Dict[str, Any], output_file: str) -> str:
                 volume['size'],
                 volume['volume_type'],
                 str(volume['days_unused']),
-                f"${volume['estimated_monthly_cost']:.2f}",
+                cost_formatted,
                 volume['recommendation']
             ])
         
-        ebs_table = Table(ebs_data, colWidths=[80, 80, 60, 50, 60, 60, 70, 180])
+        # Adjust column widths for better formatting
+        ebs_table = Table(ebs_data, colWidths=[80, 70, 60, 45, 55, 60, 70, 210])
         ebs_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
@@ -234,7 +257,9 @@ def export_to_pdf(data: Dict[str, Any], output_file: str) -> str:
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
             ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
             ('BACKGROUND', (0, 1), (-1, -1), colors.white),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('WORDWRAP', (0, 0), (-1, -1), True), # Enable word wrapping
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),  # Align content to top
         ]))
         
         elements.append(ebs_table)
@@ -248,15 +273,20 @@ def export_to_pdf(data: Dict[str, Any], output_file: str) -> str:
         eip_data = [["Allocation ID", "Public IP", "Region", "Monthly Cost", "Recommendation"]]
         
         for eip in data.get('elastic_ips', []):
+            # Convert cost to selected currency
+            cost = convert_currency(eip['estimated_monthly_cost'], "USD", currency)
+            cost_formatted = format_currency(cost, currency)
+            
             eip_data.append([
                 eip['resource_id'],
                 eip['public_ip'],
                 eip['region'],
-                f"${eip['estimated_monthly_cost']:.2f}",
+                cost_formatted,
                 eip['recommendation']
             ])
         
-        eip_table = Table(eip_data, colWidths=[100, 100, 100, 100, 200])
+        # Adjust column widths for better formatting
+        eip_table = Table(eip_data, colWidths=[120, 120, 80, 90, 240])
         eip_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
@@ -264,7 +294,9 @@ def export_to_pdf(data: Dict[str, Any], output_file: str) -> str:
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
             ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
             ('BACKGROUND', (0, 1), (-1, -1), colors.white),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('WORDWRAP', (0, 0), (-1, -1), True), # Enable word wrapping
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),  # Align content to top
         ]))
         
         elements.append(eip_table)
@@ -276,7 +308,8 @@ def export_to_pdf(data: Dict[str, Any], output_file: str) -> str:
 
 
 def export_unused_resources(data: Dict[str, Any], output_format: str = 'json', 
-                            output_dir: str = None, report_name: str = None) -> str:
+                            output_dir: str = None, report_name: str = None,
+                            currency: str = "USD") -> str:
     """
     Export unused resource data to the specified format.
     
@@ -285,6 +318,7 @@ def export_unused_resources(data: Dict[str, Any], output_format: str = 'json',
         output_format: Format to export (json, csv, pdf)
         output_dir: Directory to save the output file
         report_name: Name for the report file
+        currency: Currency code (default: USD)
         
     Returns:
         Path to the exported file
@@ -310,6 +344,6 @@ def export_unused_resources(data: Dict[str, Any], output_format: str = 'json',
     elif output_format.lower() == 'csv':
         return export_to_csv(data, output_file)
     elif output_format.lower() == 'pdf':
-        return export_to_pdf(data, output_file)
+        return export_to_pdf(data, output_file, currency)
     else:
         raise ValueError(f"Unsupported output format: {output_format}") 

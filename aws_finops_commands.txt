@@ -1,0 +1,67 @@
+# AWS FinOps Dashboard - Example Commands
+
+## Resource Analyzer Commands
+
+# Basic resource analyzer with default settings (5% CPU threshold)
+aws-finops --profiles your-profile --resource-analyzer --regions ap-south-1
+
+# Resource analyzer with longer lookback period (60 days)
+aws-finops --profiles your-profile --resource-analyzer --regions ap-south-1 --lookback-days 60
+
+# Resource analyzer with lower CPU threshold (2% - catches more instances)
+aws-finops --profiles your-profile --resource-analyzer --regions ap-south-1 --cpu-utilization-threshold 2.0
+
+# Resource analyzer with higher CPU threshold (10% - for aggressive downsizing)
+aws-finops --profiles your-profile --resource-analyzer --regions ap-south-1 --cpu-utilization-threshold 10.0
+
+# Check multiple regions at once
+aws-finops --profiles your-profile --resource-analyzer --regions ap-south-1 us-east-1 eu-west-1
+
+# Check all profiles
+aws-finops --all --resource-analyzer --regions ap-south-1
+
+# Export results to CSV report
+aws-finops --profiles your-profile --resource-analyzer --regions ap-south-1 --report-name optimization-report --report-type csv
+
+# Export results to PDF report
+aws-finops --profiles your-profile --resource-analyzer --regions ap-south-1 --report-name optimization-report --report-type pdf
+
+# Export to multiple formats
+aws-finops --profiles your-profile --resource-analyzer --regions ap-south-1 --report-name optimization-report --report-type csv json pdf
+
+# Run with debug output
+AWS_DEBUG=1 aws-finops --profiles your-profile --resource-analyzer --regions ap-south-1
+
+## Cost Dashboard Commands
+
+# Basic cost dashboard
+aws-finops --profiles your-profile
+
+# Cost dashboard with time range (last 30 days)
+aws-finops --profiles your-profile --time-range 30
+
+# Cost dashboard with trend analysis
+aws-finops --profiles your-profile --trend
+
+# Cost dashboard with anomaly detection
+aws-finops --profiles your-profile --detect-anomalies
+
+# Cost dashboard with optimization recommendations
+aws-finops --profiles your-profile --optimize
+
+# Specify custom CPU threshold for optimization recommendations
+aws-finops --profiles your-profile --optimize --cpu-threshold 30.0
+
+# Export dashboard to PDF
+aws-finops --profiles your-profile --report-name cost-report --report-type pdf
+
+## Reserved Instance (RI) Optimizer Commands
+
+# Basic RI optimizer
+aws-finops --profiles your-profile --ri-optimizer
+
+# RI optimizer with 60-day lookback
+aws-finops --profiles your-profile --ri-optimizer --lookback-days 60
+
+# RI optimizer with PDF export
+aws-finops --profiles your-profile --ri-optimizer --report-name ri-recommendations --report-type pdf 

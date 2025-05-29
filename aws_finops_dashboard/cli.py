@@ -161,8 +161,8 @@ def main() -> int:
     parser.add_argument(
         "--anomaly-sensitivity",
         type=float,
-        default=2.0,
-        help="Sensitivity for anomaly detection (default: 2.0)",
+        default=0.05,
+        help="Sensitivity for anomaly detection (default: 0.05)",
     )
     parser.add_argument(
         "--optimize",
@@ -223,6 +223,12 @@ def main() -> int:
         choices=["ec2", "ebs", "eip", "all"],
         default=["all"],
         help="Resource types to analyze (default: all)",
+    )
+    parser.add_argument(
+        "--cpu-utilization-threshold",
+        type=float,
+        default=5.0,
+        help="CPU utilization threshold (%) to consider an EC2 instance underutilized (default: 5.0)",
     )
 
     args = parser.parse_args()
@@ -348,7 +354,11 @@ def run_resource_analyzer(args):
             session = boto3.Session(profile_name=profile)
             
             # Create and run the analyzer
-            analyzer = UnusedResourceAnalyzer(session, args.lookback_days or 14)
+            analyzer = UnusedResourceAnalyzer(
+                session, 
+                args.lookback_days or 14,
+                args.cpu_utilization_threshold
+            )
             
             # Display results on console
             analyzer.display_unused_resources(args.regions)

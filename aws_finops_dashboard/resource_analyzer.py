@@ -10,22 +10,25 @@ from typing import Dict, List, Any, Optional, Set
 import boto3
 from rich.console import Console
 from rich.table import Table
+from aws_finops_dashboard.helpers import get_currency_symbol, convert_currency, format_currency
 
 console = Console()
 
 class UnusedResourceAnalyzer:
     """Analyzer for identifying unused AWS resources."""
     
-    def __init__(self, session: boto3.Session, lookback_period: int = 14):
+    def __init__(self, session: boto3.Session, lookback_period: int = 14, cpu_threshold: float = 5.0):
         """
         Initialize the analyzer.
         
         Args:
             session: Boto3 session to use for API calls
             lookback_period: Number of days to look back for usage analysis
+            cpu_threshold: CPU utilization threshold percentage to consider an instance underutilized
         """
         self.session = session
         self.lookback_period = lookback_period
+        self.cpu_threshold = cpu_threshold
         self.account_id = self._get_account_id()
         
     def _get_account_id(self) -> str:
@@ -105,44 +108,111 @@ class UnusedResourceAnalyzer:
                     
                     # For running instances, check CloudWatch metrics to determine if they're underutilized
                     if instance.state['Name'] == 'running':
+                        # Log instance details
+                        instance_name = "Unnamed"
+                        for tag in instance.tags or []:
+                            if tag['Key'] == 'Name':
+                                instance_name = tag['Value']
+                                break
+                                
+                        console.print(f"[cyan]Checking metrics for instance {instance.id} ({instance_name})[/]")
+                        
                         # Get CPU utilization for the past lookback_period days
                         end_time = datetime.datetime.now()
                         start_time = end_time - datetime.timedelta(days=self.lookback_period)
                         
-                        response = cloudwatch.get_metric_statistics(
-                            Namespace='AWS/EC2',
-                            MetricName='CPUUtilization',
-                            Dimensions=[{'Name': 'InstanceId', 'Value': instance.id}],
-                            StartTime=start_time,
-                            EndTime=end_time,
-                            Period=86400,  # 1 day in seconds
-                            Statistics=['Average']
-                        )
-                        
-                        # Calculate average CPU utilization
-                        if response['Datapoints']:
-                            avg_cpu = sum(dp['Average'] for dp in response['Datapoints']) / len(response['Datapoints'])
+                        try:
+                            response = cloudwatch.get_metric_statistics(
+                                Namespace='AWS/EC2',
+                                MetricName='CPUUtilization',
+                                Dimensions=[{'Name': 'InstanceId', 'Value': instance.id}],
+                                StartTime=start_time,
+                                EndTime=end_time,
+                                Period=86400,  # 1 day in seconds
+                                Statistics=['Average']
+                            )
                             
-                            # If CPU utilization is consistently below 5%, flag as unused
-                            if avg_cpu < 5.0:
-                                instance_name = "Unnamed"
-                                for tag in instance.tags or []:
-                                    if tag['Key'] == 'Name':
-                                        instance_name = tag['Value']
-                                        break
+                            # Print debugging info
+                            console.print(f"[cyan]  - Found {len(response['Datapoints'])} datapoints for metrics[/]")
+                            
+                            # Calculate average CPU utilization
+                            if response['Datapoints']:
+                                avg_cpu = sum(dp['Average'] for dp in response['Datapoints']) / len(response['Datapoints'])
+                                console.print(f"[cyan]  - Average CPU: {avg_cpu:.2f}% (threshold: {self.cpu_threshold:.2f}%)[/]")
                                 
-                                unused_instances.append({
-                                    'resource_id': instance.id,
-                                    'resource_type': 'EC2 Instance',
-                                    'name': instance_name,
-                                    'region': region,
-                                    'state': 'underutilized',
-                                    'days_unused': self.lookback_period,
-                                    'estimated_monthly_cost': self._estimate_ec2_monthly_cost(instance.instance_type, region),
-                                    'last_used': 'Currently running',
-                                    'utilization': f"{avg_cpu:.1f}% CPU",
-                                    'recommendation': f"Consider downsizing; avg CPU: {avg_cpu:.1f}%"
-                                })
+                                # If CPU utilization is consistently below threshold, flag as unused
+                                if avg_cpu < self.cpu_threshold:
+                                    console.print(f"[green]  - Instance flagged as underutilized[/]")
+                                    
+                                    unused_instances.append({
+                                        'resource_id': instance.id,
+                                        'resource_type': 'EC2 Instance',
+                                        'name': instance_name,
+                                        'region': region,
+                                        'state': 'underutilized',
+                                        'days_unused': self.lookback_period,
+                                        'estimated_monthly_cost': self._estimate_ec2_monthly_cost(instance.instance_type, region),
+                                        'last_used': 'Currently running',
+                                        'utilization': f"{avg_cpu:.1f}% CPU",
+                                        'recommendation': f"Consider downsizing; avg CPU: {avg_cpu:.1f}%"
+                                    })
+                                else:
+                                    console.print(f"[yellow]  - Instance not flagged (utilization above threshold)[/]")
+                            else:
+                                # Try with a different period
+                                console.print(f"[yellow]  - No data with daily period, trying hourly period...[/]")
+                                response = cloudwatch.get_metric_statistics(
+                                    Namespace='AWS/EC2',
+                                    MetricName='CPUUtilization',
+                                    Dimensions=[{'Name': 'InstanceId', 'Value': instance.id}],
+                                    StartTime=start_time,
+                                    EndTime=end_time,
+                                    Period=3600,  # 1 hour in seconds
+                                    Statistics=['Average']
+                                )
+                                
+                                if response['Datapoints']:
+                                    console.print(f"[cyan]  - Found {len(response['Datapoints'])} hourly datapoints[/]")
+                                    avg_cpu = sum(dp['Average'] for dp in response['Datapoints']) / len(response['Datapoints'])
+                                    console.print(f"[cyan]  - Average CPU: {avg_cpu:.2f}% (threshold: {self.cpu_threshold:.2f}%)[/]")
+                                    
+                                    # If CPU utilization is consistently below threshold, flag as unused
+                                    if avg_cpu < self.cpu_threshold:
+                                        console.print(f"[green]  - Instance flagged as underutilized[/]")
+                                        
+                                        unused_instances.append({
+                                            'resource_id': instance.id,
+                                            'resource_type': 'EC2 Instance',
+                                            'name': instance_name,
+                                            'region': region,
+                                            'state': 'underutilized',
+                                            'days_unused': self.lookback_period,
+                                            'estimated_monthly_cost': self._estimate_ec2_monthly_cost(instance.instance_type, region),
+                                            'last_used': 'Currently running',
+                                            'utilization': f"{avg_cpu:.1f}% CPU",
+                                            'recommendation': f"Consider downsizing; avg CPU: {avg_cpu:.1f}%"
+                                        })
+                                    else:
+                                        console.print(f"[yellow]  - Instance not flagged (utilization above threshold)[/]")
+                                else:
+                                    # Log instances with missing CloudWatch data
+                                    console.print(f"[yellow]Warning: No CloudWatch data for instance {instance.id} ({instance_name}) in {region}[/]")
+                                    
+                                    # Try listing available metrics for this instance
+                                    console.print(f"[cyan]  - Checking available metrics for this instance...[/]")
+                                    try:
+                                        available_metrics = cloudwatch.list_metrics(
+                                            Namespace='AWS/EC2',
+                                            Dimensions=[{'Name': 'InstanceId', 'Value': instance.id}]
+                                        )
+                                        if available_metrics['Metrics']:
+                                            console.print(f"[cyan]  - Available metrics: {[m['MetricName'] for m in available_metrics['Metrics']]}")
+                                        else:
+                                            console.print(f"[yellow]  - No metrics available for this instance")
+                                    except Exception as e:
+                                        console.print(f"[red]  - Error listing metrics: {str(e)}")
+                        except Exception as e:
+                            console.print(f"[red]Error getting metrics for {instance.id}: {str(e)}")
             except Exception as e:
                 console.print(f"[yellow]Error analyzing EC2 instances in {region}: {str(e)}[/]")
                 
@@ -356,14 +426,18 @@ class UnusedResourceAnalyzer:
             'regions_analyzed': regions
         }
     
-    def display_unused_resources(self, regions: Optional[List[str]] = None) -> None:
+    def display_unused_resources(self, regions: Optional[List[str]] = None, currency: str = "USD") -> None:
         """
         Display a report of unused resources.
         
         Args:
             regions: List of regions to analyze, or None for all accessible regions
+            currency: Currency to use for display (default: USD)
         """
         results = self.get_all_unused_resources(regions)
+        
+        # Get currency symbol
+        currency_symbol = get_currency_symbol(currency)
         
         # Display EC2 instances
         if results['ec2_instances']:
@@ -378,18 +452,22 @@ class UnusedResourceAnalyzer:
             table.add_column("Name")
             table.add_column("Region")
             table.add_column("State")
-            table.add_column("Utilization/Days Unused")
-            table.add_column("Monthly Cost ($)")
+            table.add_column("CPU Usage")
+            table.add_column(f"Cost ({currency})")
             table.add_column("Recommendation")
             
             for instance in results['ec2_instances']:
+                # Convert cost to specified currency
+                cost = convert_currency(instance['estimated_monthly_cost'], "USD", currency)
+                cost_formatted = format_currency(cost, currency)
+                
                 table.add_row(
                     instance['resource_id'],
                     instance['name'],
                     instance['region'],
                     instance['state'],
                     instance.get('utilization', f"{instance['days_unused']} days"),
-                    f"${instance['estimated_monthly_cost']:.2f}",
+                    cost_formatted,
                     instance['recommendation']
                 )
             
@@ -400,7 +478,7 @@ class UnusedResourceAnalyzer:
         # Display EBS volumes
         if results['ebs_volumes']:
             table = Table(
-                title=f"Unused EBS Volumes",
+                title="Unused EBS Volumes",
                 box=None,
                 show_header=True,
                 header_style="bold"
@@ -412,18 +490,22 @@ class UnusedResourceAnalyzer:
             table.add_column("Size")
             table.add_column("Type")
             table.add_column("Days Unused")
-            table.add_column("Monthly Cost ($)")
+            table.add_column(f"Cost ({currency})")
             table.add_column("Recommendation")
             
             for volume in results['ebs_volumes']:
+                # Convert cost to specified currency
+                cost = convert_currency(volume['estimated_monthly_cost'], "USD", currency)
+                cost_formatted = format_currency(cost, currency)
+                
                 table.add_row(
                     volume['resource_id'],
-                    volume['name'],
+                    volume.get('name', 'Unnamed'),
                     volume['region'],
                     volume['size'],
                     volume['volume_type'],
                     str(volume['days_unused']),
-                    f"${volume['estimated_monthly_cost']:.2f}",
+                    cost_formatted,
                     volume['recommendation']
                 )
             
@@ -434,7 +516,7 @@ class UnusedResourceAnalyzer:
         # Display Elastic IPs
         if results['elastic_ips']:
             table = Table(
-                title=f"Unused Elastic IPs",
+                title="Unused Elastic IPs",
                 box=None,
                 show_header=True,
                 header_style="bold"
@@ -443,30 +525,45 @@ class UnusedResourceAnalyzer:
             table.add_column("Allocation ID")
             table.add_column("Public IP")
             table.add_column("Region")
-            table.add_column("Monthly Cost ($)")
+            table.add_column(f"Cost ({currency})")
             table.add_column("Recommendation")
             
             for eip in results['elastic_ips']:
+                # Convert cost to specified currency
+                cost = convert_currency(eip['estimated_monthly_cost'], "USD", currency)
+                cost_formatted = format_currency(cost, currency)
+                
                 table.add_row(
                     eip['resource_id'],
                     eip['public_ip'],
                     eip['region'],
-                    f"${eip['estimated_monthly_cost']:.2f}",
+                    cost_formatted,
                     eip['recommendation']
                 )
             
             console.print(table)
         else:
             console.print("[green]No unused Elastic IPs found.[/]")
-        
+            
         # Display summary
-        console.print(f"\n[bold cyan]Summary:[/]")
+        monthly_savings = results['estimated_monthly_savings']
+        annual_savings = results['estimated_annual_savings']
+        
+        # Convert to specified currency
+        monthly_savings = convert_currency(monthly_savings, "USD", currency)
+        annual_savings = convert_currency(annual_savings, "USD", currency)
+        
+        # Format with currency
+        monthly_savings_formatted = format_currency(monthly_savings, currency)
+        annual_savings_formatted = format_currency(annual_savings, currency)
+        
+        console.print("\nSummary:")
         console.print(f"Total unused resources: {results['total_resources']}")
-        console.print(f"Estimated monthly savings: [bold green]${results['estimated_monthly_savings']:.2f}[/]")
-        console.print(f"Estimated annual savings: [bold green]${results['estimated_annual_savings']:.2f}[/]")
+        console.print(f"Estimated monthly savings: {monthly_savings_formatted}")
+        console.print(f"Estimated annual savings: {annual_savings_formatted}")
 
 def analyze_unused_resources(session: boto3.Session, regions: Optional[List[str]] = None, 
-                             lookback_days: int = 14) -> Dict[str, Any]:
+                             lookback_days: int = 14, cpu_threshold: float = 5.0) -> Dict[str, Any]:
     """
     Analyze unused AWS resources for potential cost savings.
     
@@ -474,16 +571,17 @@ def analyze_unused_resources(session: boto3.Session, regions: Optional[List[str]
         session: Boto3 session to use for API calls
         regions: List of regions to analyze, or None for all accessible regions
         lookback_days: Number of days to look back for usage analysis
+        cpu_threshold: CPU utilization threshold percentage to consider an instance underutilized
         
     Returns:
         Dictionary with lists of unused resources by type
     """
-    analyzer = UnusedResourceAnalyzer(session, lookback_days)
+    analyzer = UnusedResourceAnalyzer(session, lookback_days, cpu_threshold)
     return analyzer.get_all_unused_resources(regions)
 
 
 def display_unused_resources_summary(session: boto3.Session, regions: Optional[List[str]] = None,
-                                     lookback_days: int = 14) -> None:
+                                     lookback_days: int = 14, cpu_threshold: float = 5.0) -> None:
     """
     Display a summary of unused AWS resources.
     
@@ -491,6 +589,7 @@ def display_unused_resources_summary(session: boto3.Session, regions: Optional[L
         session: Boto3 session to use for API calls
         regions: List of regions to analyze, or None for all accessible regions
         lookback_days: Number of days to look back for usage analysis
+        cpu_threshold: CPU utilization threshold percentage to consider an instance underutilized
     """
-    analyzer = UnusedResourceAnalyzer(session, lookback_days)
+    analyzer = UnusedResourceAnalyzer(session, lookback_days, cpu_threshold)
     analyzer.display_unused_resources(regions) 

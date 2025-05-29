@@ -3,7 +3,7 @@
 # Start API server in the background
 echo "Starting API server..."
 cd "$(dirname "$0")"
-python -m aws_finops_dashboard.api &
+python3 -m aws_finops_dashboard.api &
 API_PID=$!
 
 # Start Next.js frontend
