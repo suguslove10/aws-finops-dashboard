@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { FaExclamationTriangle, FaSyncAlt } from 'react-icons/fa';
-import { motion } from 'framer-motion';
 import { LoadingSpinner } from './LoadingSpinner';
 
 interface ErrorFeedbackProps {
@@ -65,10 +64,8 @@ export function ErrorFeedback({
   };
 
   return (
-    <motion.div 
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className={`${classes.bg} p-5 rounded-lg border ${classes.border} mb-6 shadow-sm`}
+    <div 
+      className={`${classes.bg} p-5 rounded-lg border ${classes.border} mb-6 shadow-sm animate-fade-in`}
     >
       <div className="flex items-start">
         <div className={`${classes.iconBg} p-3 rounded-full mr-3 shrink-0`}>
@@ -80,12 +77,10 @@ export function ErrorFeedback({
             {message}
           </p>
           {onRetry && (
-            <motion.button
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
+            <button
               onClick={handleRetry}
               disabled={isRetrying}
-              className={`flex items-center text-sm px-4 py-2 ${classes.button} rounded-full transition-colors`}
+              className={`flex items-center text-sm px-4 py-2 ${classes.button} rounded-full transition-all hover:scale-105 active:scale-95`}
             >
               {isRetrying ? (
                 <>
@@ -98,10 +93,10 @@ export function ErrorFeedback({
                   <span>Retry</span>
                 </>
               )}
-            </motion.button>
+            </button>
           )}
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 } 

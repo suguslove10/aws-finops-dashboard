@@ -249,12 +249,6 @@ export default function ResourceAnalyzerOptions({ onSubmit }: ResourceAnalyzerOp
           </div>
         </div>
       </Card>
-
-      <Flex justifyContent="end" className="mt-6">
-        <Button onClick={handleSubmit}>
-          Run Analysis
-        </Button>
-      </Flex>
     </Card>
   );
 } 

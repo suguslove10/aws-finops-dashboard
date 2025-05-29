@@ -9,7 +9,6 @@ import { RegionSelector } from '@/components/RegionSelector';
 import { CurrencySelector } from '@/components/CurrencySelector';
 import { TagSelector } from '@/components/TagSelector';
 import { TaskOutput } from '@/components/TaskOutput';
-import ResourceAnalyzerOptions from '@/components/ResourceAnalyzerOptions';
 import { Task, runTask } from '@/lib/api';
 import { Button, Card, Title, Text, Switch } from '@tremor/react';
 import { motion } from 'framer-motion';
@@ -101,31 +100,15 @@ export default function Home() {
     }
   };
 
-  const runTaskHandler = async () => {
+  const handleStartTask = async () => {
     if (!selectedTask || selectedProfiles.length === 0 || selectedRegions.length === 0) {
-      alert('Please complete all required fields');
+      alert('Please select a task, at least one profile, and at least one region.');
       return;
     }
 
-    setIsTaskRunning(true);
-
     try {
-      // Get resource types from ResourceAnalyzerOptions component if it's the selected task
-      const resourceTypes = 
-        selectedTask.id === 'resource_analyzer' && 
-        document.getElementById('resource-analyzer-form')
-          ? Array.from(document.querySelectorAll('#resource-analyzer-form input[name="resource-type"]:checked'))
-              .map((el) => (el as HTMLInputElement).value)
-          : ['all'];
-      
-      // Get debug mode from ResourceAnalyzerOptions component
-      const debugMode = 
-        selectedTask.id === 'resource_analyzer' &&
-        document.getElementById('debug-output')
-          ? (document.getElementById('debug-output') as HTMLInputElement).checked
-          : false;
-
-      const result = await runTask({
+      setIsTaskRunning(true);
+      await runTask({
         task_type: selectedTask.id,
         profiles: selectedProfiles,
         regions: selectedRegions,
@@ -140,14 +123,11 @@ export default function Home() {
         skip_savings_plans: skipSavingsPlans,
         cpu_threshold: cpuThreshold,
         anomaly_sensitivity: anomalySensitivity,
-        lookback_days: lookbackDays,
-        resource_types: resourceTypes,
-        debug_mode: debugMode,
+        lookback_days: lookbackDays
       });
-
-      // The rest of the function remains the same...
     } catch (error) {
-      console.error('Error running task:', error);
+      console.error('Failed to start task:', error);
+      alert('Failed to start task. Please check console for details.');
       setIsTaskRunning(false);
     }
   };
@@ -184,7 +164,12 @@ export default function Home() {
             </div>
             
             {showPresets && (
-              <div className="mt-6 bg-blue-50 dark:bg-blue-900/10 p-4 rounded-xl border border-blue-200 dark:border-blue-800/30 animate-fadeIn">
+              <motion.div 
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="mt-6 bg-blue-50 dark:bg-blue-900/10 p-4 rounded-xl border border-blue-200 dark:border-blue-800/30"
+              >
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-lg font-medium text-gray-900 dark:text-white flex items-center gap-2">
                     <FaBookmark className="text-blue-500" />
@@ -217,7 +202,7 @@ export default function Home() {
                     </div>
                   ))}
                 </div>
-              </div>
+              </motion.div>
             )}
             
             {!isTaskRunning && (
@@ -238,7 +223,12 @@ export default function Home() {
             {!isTaskRunning ? (
               <>
                 {wizardStep === 1 && (
-                  <div className="animate-slideIn">
+                  <motion.div
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 20 }}
+                    transition={{ duration: 0.3 }}
+                  >
                     <TaskSelector 
                       onSelectTask={setSelectedTask} 
                       selectedTaskId={selectedTask?.id} 
@@ -255,11 +245,16 @@ export default function Home() {
                         Next
                       </Button>
                     </div>
-                  </div>
+                  </motion.div>
                 )}
                 
                 {wizardStep === 2 && (
-                  <div className="animate-slideIn">
+                  <motion.div
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 20 }}
+                    transition={{ duration: 0.3 }}
+                  >
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                       <ProfileSelector 
                         selectedProfiles={selectedProfiles}
@@ -293,11 +288,16 @@ export default function Home() {
                         Next
                       </Button>
                     </div>
-                  </div>
+                  </motion.div>
                 )}
                 
                 {wizardStep === 3 && (
-                  <div className="animate-slideIn">
+                  <motion.div
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 20 }}
+                    transition={{ duration: 0.3 }}
+                  >
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                       <CurrencySelector 
                         selectedCurrency={selectedCurrency}
@@ -388,72 +388,135 @@ export default function Home() {
                       </button>
                       
                       {showAdvancedOptions && (
-                        <div className="space-y-6 mt-6 border-t border-gray-200 dark:border-gray-700 pt-6">
-                          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Advanced Options</h3>
-                          
-                          {selectedTask?.id === 'resource_analyzer' ? (
-                            <ResourceAnalyzerOptions 
-                              onSubmit={(options) => {
-                                setCpuThreshold(options.cpuThreshold);
-                                setLookbackDays(options.lookbackPeriod);
-                                setSelectedCurrency(options.currency);
-                                runTaskHandler();
-                              }}
-                            />
-                          ) : (
-                            <>
-                              {(selectedTask?.id === 'optimize' || selectedTask?.id === 'dashboard') && (
-                                <div className="space-y-4">
-                                  <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                      CPU Threshold (%)
-                                    </label>
-                                    <div className="flex items-center">
-                                      <input
-                                        type="range"
-                                        min="5"
-                                        max="80"
-                                        step="5"
-                                        value={cpuThreshold}
-                                        onChange={(e) => setCpuThreshold(parseInt(e.target.value))}
-                                        className="w-full h-2 bg-blue-100 rounded-lg appearance-none cursor-pointer dark:bg-blue-900/30"
-                                      />
-                                      <span className="ml-2 text-sm text-gray-700 dark:text-gray-300 w-10 text-center">{cpuThreshold}%</span>
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-4 space-y-6"
+                        >
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <Card className="shadow-md">
+                              <div className="px-1 py-2">
+                                <Title className="text-lg font-bold flex items-center gap-2">
+                                  <FaChartLine className="text-blue-500" />
+                                  <span>Analysis Options</span>
+                                </Title>
+                                
+                                <div className="mt-4 space-y-4">
+                                  <div className="flex items-center justify-between">
+                                    <div>
+                                      <p className="font-medium text-gray-800 dark:text-gray-200">Enhanced PDF Report</p>
+                                      <p className="text-xs text-gray-500 dark:text-gray-400">Generate PDF with visualizations and executive summary</p>
                                     </div>
+                                    <Switch
+                                      id="enhanced-pdf"
+                                      name="enhanced-pdf"
+                                      checked={enhancedPdf}
+                                      onChange={setEnhancedPdf}
+                                      color="blue"
+                                    />
+                                  </div>
+                                  
+                                  <div className="flex items-center justify-between">
+                                    <div>
+                                      <p className="font-medium text-gray-800 dark:text-gray-200">Skip RI Analysis</p>
+                                      <p className="text-xs text-gray-500 dark:text-gray-400">Skip Reserved Instance analysis in optimization</p>
+                                    </div>
+                                    <Switch
+                                      id="skip-ri"
+                                      name="skip-ri"
+                                      checked={skipRiAnalysis}
+                                      onChange={setSkipRiAnalysis}
+                                      color="blue"
+                                    />
+                                  </div>
+                                  
+                                  <div className="flex items-center justify-between">
+                                    <div>
+                                      <p className="font-medium text-gray-800 dark:text-gray-200">Skip Savings Plans</p>
+                                      <p className="text-xs text-gray-500 dark:text-gray-400">Skip Savings Plans analysis in optimization</p>
+                                    </div>
+                                    <Switch
+                                      id="skip-savings"
+                                      name="skip-savings"
+                                      checked={skipSavingsPlans}
+                                      onChange={setSkipSavingsPlans}
+                                      color="blue"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            </Card>
+                            
+                            <Card className="shadow-md">
+                              <div className="px-1 py-2">
+                                <Title className="text-lg font-bold flex items-center gap-2">
+                                  <FaCalendarAlt className="text-blue-500" />
+                                  <span>Threshold Settings</span>
+                                </Title>
+                                
+                                <div className="mt-4 space-y-4">
+                                  <div>
+                                    <label className="flex items-center justify-between text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                      <span>CPU Threshold (%)</span>
+                                      <span>{cpuThreshold}%</span>
+                                    </label>
+                                    <input
+                                      type="range"
+                                      min="10"
+                                      max="90"
+                                      step="5"
+                                      value={cpuThreshold}
+                                      onChange={(e) => setCpuThreshold(parseInt(e.target.value))}
+                                      className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg"
+                                    />
                                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                      Threshold for EC2 underutilization
+                                      For EC2 right-sizing recommendations
                                     </p>
                                   </div>
                                   
-                                  {selectedTask?.id === 'optimize' && (
-                                    <div className="space-y-3">
-                                      <div className="flex items-center justify-between">
-                                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                                          Skip Reserved Instance Analysis
-                                        </label>
-                                        <Switch
-                                          checked={skipRiAnalysis}
-                                          onChange={setSkipRiAnalysis}
-                                          color="blue"
-                                        />
-                                      </div>
-                                      <div className="flex items-center justify-between">
-                                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                                          Skip Savings Plans Analysis
-                                        </label>
-                                        <Switch
-                                          checked={skipSavingsPlans}
-                                          onChange={setSkipSavingsPlans}
-                                          color="blue"
-                                        />
-                                      </div>
-                                    </div>
-                                  )}
+                                  <div>
+                                    <label className="flex items-center justify-between text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                      <span>Anomaly Sensitivity</span>
+                                      <span>{anomalySensitivity}</span>
+                                    </label>
+                                    <input
+                                      type="range"
+                                      min="0.01"
+                                      max="0.1"
+                                      step="0.01"
+                                      value={anomalySensitivity}
+                                      onChange={(e) => setAnomalySensitivity(parseFloat(e.target.value))}
+                                      className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg"
+                                    />
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                      Lower values are more sensitive to anomalies
+                                    </p>
+                                  </div>
+                                  
+                                  <div>
+                                    <label className="flex items-center justify-between text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                      <span>Lookback Days</span>
+                                      <span>{lookbackDays} days</span>
+                                    </label>
+                                    <input
+                                      type="range"
+                                      min="7"
+                                      max="90"
+                                      step="1"
+                                      value={lookbackDays}
+                                      onChange={(e) => setLookbackDays(parseInt(e.target.value))}
+                                      className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg"
+                                    />
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                      For RI and Savings Plan recommendations
+                                    </p>
+                                  </div>
                                 </div>
-                              )}
-                            </>
-                          )}
-                        </div>
+                              </div>
+                            </Card>
+                          </div>
+                        </motion.div>
                       )}
                     </div>
                     
@@ -466,15 +529,15 @@ export default function Home() {
                       >
                         Back
                       </Button>
-                      <Button
-                        size="lg"
-                        color="blue"
+                      <motion.button 
                         disabled={!isStepValid()}
-                        onClick={runTaskHandler}
+                        onClick={handleStartTask}
+                        whileHover={{ scale: 1.03 }}
+                        whileTap={{ scale: 0.97 }}
                         className={`
                           relative overflow-hidden group flex items-center gap-3 px-8 py-3.5 
                           font-medium text-white rounded-xl shadow-lg
-                          transition-all duration-300 hover:scale-105 active:scale-95
+                          transition-all duration-300
                           ${!isStepValid()
                             ? 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed opacity-60'
                             : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700'
@@ -499,14 +562,14 @@ export default function Home() {
                         </span>
                         <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-indigo-500 to-blue-500 opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
                         <div className="absolute right-0 top-0 bottom-0 w-12 bg-gradient-to-l from-white/20 to-transparent transform translate-x-12 group-hover:translate-x-0 transition-transform duration-300"></div>
-                      </Button>
+                      </motion.button>
                     </div>
-                  </div>
+                  </motion.div>
                 )}
               </>
             ) : (
               <TaskOutput 
-                taskType={selectedTask?.id || ''} 
+                taskType="dashboard" 
                 onViewResults={() => router.push('/previous-results')}
               />
             )}

@@ -178,57 +178,124 @@ def delete_config(filename):
 
 @app.route('/api/run_task', methods=['POST'])
 def run_task():
-    """Run a task."""
+    """Run a task based on the provided parameters."""
     data = request.json
-
-    # Create args object
-    args = type('Args', (), {
-        'profiles': data.get('profiles', []),
-        'all': not data.get('profiles'),
-        'regions': data.get('regions', []),
-        'combine': data.get('combine', False),
-        'report_name': data.get('report_name', f"report_{datetime.now().strftime('%Y%m%d_%H%M%S')}"),
-        'report_type': data.get('formats', []),
-        'dir': OUTPUT_DIR,
-        'time_range': int(data.get('time_range', 30)),
-        'tag': data.get('tags', []),  # Support for tag-based filtering
-        'trend': data.get('task_type') == 'trend',
-        'audit': data.get('task_type') == 'audit',
-        'detect_anomalies': data.get('task_type') == 'anomalies',
-        'anomaly_sensitivity': float(data.get('anomaly_sensitivity', 0.05)),
-        'optimize': data.get('task_type') == 'optimize',
-        'cpu_threshold': float(data.get('cpu_threshold', 40.0)),
-        'skip_ri_analysis': data.get('skip_ri_analysis', False),
-        'skip_savings_plans': data.get('skip_savings_plans', False),
-        'currency': data.get('currency', 'USD'),
-        'enhanced_pdf': data.get('enhanced_pdf', False),
-        'ri_optimizer': data.get('task_type') == 'ri_optimizer',
-        'resource_analyzer': data.get('task_type') == 'resource_analyzer',
-        'resource_types': data.get('resource_types', ['all']),
-        'lookback_days': int(data.get('lookback_days', 30)),
-        'tag_analyzer': data.get('task_type') == 'tag_analyzer',
-        'config_file': None,
-        'cpu_utilization_threshold': float(data.get('cpu_threshold', 5.0)), # Added for resource analyzer
-        'debug_mode': data.get('debug_mode', False) # Added for debug output
-    })
-
-    # Create a new thread to run the task
-    task_type = data.get('task_type', 'dashboard')
+    task_type = data.get('task_type')
+    profiles = data.get('profiles', [])
+    regions = data.get('regions', [])
+    combine = data.get('combine', False)
+    report_name = data.get('report_name', 'aws_finops_report')
+    formats = data.get('formats', ['json'])
+    currency = data.get('currency', 'USD')  # Make sure we get the currency
+    tag = data.get('tag')
+    time_range = data.get('time_range')
+    enhanced_pdf = data.get('enhanced_pdf', False)
+    skip_ri_analysis = data.get('skip_ri_analysis', False)
+    skip_savings_plans = data.get('skip_savings_plans', False)
+    cpu_threshold = data.get('cpu_threshold', 5)
+    anomaly_sensitivity = data.get('anomaly_sensitivity', 0.05)
+    lookback_days = data.get('lookback_days', 14)
+    resource_types = data.get('resource_types', ['all'])
+    debug_mode = data.get('debug_mode', False)
     
-    # Set environment variable for debug mode if enabled
-    env = os.environ.copy()
-    if task_type == 'resource_analyzer' and data.get('debug_mode', False):
-        env['AWS_DEBUG'] = '1'
+    # Set debug environment variable if requested
+    if debug_mode:
+        os.environ['AWS_DEBUG'] = '1'
     
-    task_thread = threading.Thread(
-        target=run_task_thread, 
-        args=(args, task_type), 
-        kwargs={'env': env}
+    # Start the task in a separate thread
+    thread = threading.Thread(
+        target=_run_task, 
+        args=(
+            task_type, 
+            profiles, 
+            regions, 
+            combine, 
+            report_name, 
+            formats,
+            currency,  # Pass the currency parameter to _run_task
+            tag, 
+            time_range,
+            enhanced_pdf,
+            skip_ri_analysis,
+            skip_savings_plans,
+            cpu_threshold,
+            anomaly_sensitivity,
+            lookback_days,
+            resource_types,
+        )
     )
-    task_thread.daemon = True
-    task_thread.start()
+    thread.start()
+    
+    return jsonify({'status': 'running', 'task': task_type})
 
-    return jsonify({'status': 'running', 'task_type': task_type})
+def _run_task(
+    task_type, 
+    profiles, 
+    regions, 
+    combine, 
+    report_name, 
+    formats,
+    currency,  # Accept currency parameter
+    tag, 
+    time_range,
+    enhanced_pdf,
+    skip_ri_analysis,
+    skip_savings_plans,
+    cpu_threshold,
+    anomaly_sensitivity,
+    lookback_days,
+    resource_types,
+):
+    """Run a task in a separate thread."""
+    try:
+        # Create the output directory if it doesn't exist
+        os.makedirs(os.path.join(OUTPUT_DIR), exist_ok=True)
+        
+        # Create a namespace object similar to argparse result
+        import argparse
+        args = argparse.Namespace()
+        
+        # Set all the attributes from parameters
+        args.profiles = profiles
+        args.all = not profiles  # Use --all if no profiles specified
+        args.regions = regions
+        args.combine = combine
+        args.report_name = report_name
+        args.report_type = formats
+        args.dir = OUTPUT_DIR
+        args.currency = currency
+        args.tag = tag
+        args.time_range = time_range
+        args.enhanced_pdf = enhanced_pdf
+        args.skip_ri_analysis = skip_ri_analysis
+        args.skip_savings_plans = skip_savings_plans
+        args.cpu_threshold = cpu_threshold
+        args.anomaly_sensitivity = anomaly_sensitivity
+        args.lookback_days = lookback_days
+        args.resource_types = resource_types
+        
+        # Set task-specific flags
+        args.dashboard = task_type == 'dashboard'
+        args.trend = task_type == 'trend'
+        args.audit = task_type == 'audit'
+        args.detect_anomalies = task_type == 'anomalies' 
+        args.optimize = task_type == 'optimize'
+        args.ri_optimizer = task_type == 'ri_optimizer'
+        args.resource_analyzer = task_type == 'resource_analyzer'
+        args.tag_analyzer = task_type == 'tag_analyzer'
+        
+        # Set the CPU utilization threshold (specific to resource analyzer)
+        args.cpu_utilization_threshold = cpu_threshold
+        
+        # Run the dashboard with the namespace object
+        run_dashboard(args)
+
+        return True
+    except Exception as e:
+        print(f"Error running task: {str(e)}")
+        import traceback
+        print(traceback.format_exc())
+        return False
 
 @app.route('/api/task_status', methods=['GET'])
 def task_status():
@@ -428,6 +495,113 @@ def add_profile_with_aws_cli(profile_name, aws_access_key_id, aws_secret_access_
     except Exception as e:
         print(f"Error adding profile with AWS CLI: {str(e)}")
         return False
+
+@app.route('/api/run_aws_cli', methods=['POST'])
+def run_aws_cli_command():
+    """Run an AWS CLI command and return the output with ANSI colors preserved."""
+    data = request.json
+    command = data.get('command', '')
+    task_type = data.get('task_type', 'custom')
+    
+    if not command:
+        return jsonify({'status': 'error', 'message': 'Command is required'}), 400
+    
+    try:
+        # For security, restrict commands to aws-finops only
+        if not command.startswith('aws-finops'):
+            return jsonify({'status': 'error', 'message': 'Only aws-finops commands are allowed'}), 400
+        
+        # Modify command to force color output if not specified
+        if '--force-color' not in command:
+            command += ' --force-color'
+            
+        print(f"Executing command: {command}")
+            
+        # Set environment variables to ensure proper color and formatting output
+        env = {
+            **os.environ, 
+            'PYTHONIOENCODING': 'UTF-8',
+            'PYTHONUNBUFFERED': '1',
+            'AWS_PAGER': '',
+            'TERM': 'xterm-256color',
+            'FORCE_COLOR': '1',
+            'COLUMNS': '132',  # Set wide terminal width for tables
+            'LINES': '50',     # Set terminal height
+            'AWS_COLOR': '1',  # Force AWS CLI to use color
+            'CLICOLOR_FORCE': '1', # Force color even in non-interactive terminals
+            'AWS_FINOPS_FORCE_COLOR': '1' # Custom env var for our app
+        }
+            
+        # Run the command and capture output with ANSI colors preserved
+        process = subprocess.Popen(
+            command,
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,  # Line buffered
+            universal_newlines=True,
+            env=env
+        )
+        
+        # Capture the output
+        output = ""
+        while True:
+            line = process.stdout.readline()
+            if not line and process.poll() is not None:
+                break
+            if line:
+                output += line
+                print(line, end='')  # Debug: print to server console
+        
+        # Wait for the process to complete
+        process.wait()
+        
+        # Debug print output length and sample
+        print(f"Output length: {len(output)}")
+        print(f"Output sample: {output[:100]}")
+        
+        # Ensure we have some minimal output even if the command didn't output anything
+        if not output.strip():
+            output = "Command executed successfully but produced no output."
+        
+        # Store the result in task_results for status API compatibility
+        task_results[task_type] = {
+            'status': 'completed' if process.returncode == 0 else 'error',
+            'output': output,
+            'files': [],  # Find any generated files
+            'last_updated': datetime.now().isoformat()
+        }
+        
+        # Find any generated files
+        if process.returncode == 0:
+            files = []
+            try:
+                for fname in os.listdir(OUTPUT_DIR):
+                    if os.path.isfile(os.path.join(OUTPUT_DIR, fname)) and fname.endswith(('.csv', '.json', '.pdf', '.txt')):
+                        # Only add files that were modified in the last 5 minutes
+                        file_path = os.path.join(OUTPUT_DIR, fname)
+                        if datetime.fromtimestamp(os.path.getmtime(file_path)) > datetime.now().timestamp() - 300:
+                            files.append(fname)
+                task_results[task_type]['files'] = files
+            except Exception as e:
+                print(f"Error finding generated files: {e}")
+        
+        return jsonify({
+            'status': 'completed' if process.returncode == 0 else 'error',
+            'output': output,
+            'task': task_type,
+            'files': task_results[task_type]['files']
+        })
+        
+    except Exception as e:
+        error_msg = str(e)
+        print(f"Error running AWS CLI command: {error_msg}")
+        return jsonify({
+            'status': 'error',
+            'message': error_msg,
+            'output': f"Error running command: {error_msg}"
+        }), 500
 
 def run_api(host='0.0.0.0', port=5001):
     """Run the API server."""

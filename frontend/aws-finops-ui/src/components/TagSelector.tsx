@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { Card, Title, Text } from '@tremor/react';
 import { FaTags, FaPlus, FaTimes } from 'react-icons/fa';
-import { motion, AnimatePresence } from 'framer-motion';
 
 interface TagSelectorProps {
   selectedTags: string[];
@@ -96,25 +95,20 @@ export function TagSelector({ selectedTags, onSelectTags }: TagSelectorProps) {
           <div className="mt-4">
             <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Selected Tags:</h3>
             <div className="flex flex-wrap gap-2">
-              <AnimatePresence>
-                {selectedTags.map((tag) => (
-                  <motion.div
-                    key={tag}
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.8 }}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800/50"
+              {selectedTags.map((tag) => (
+                <div
+                  key={tag}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800/50 animate-fade-scale"
+                >
+                  <span className="text-sm">{tag}</span>
+                  <button
+                    onClick={() => handleRemoveTag(tag)}
+                    className="ml-1 text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-200 focus:outline-none"
                   >
-                    <span className="text-sm">{tag}</span>
-                    <button
-                      onClick={() => handleRemoveTag(tag)}
-                      className="ml-1 text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-200 focus:outline-none"
-                    >
-                      <FaTimes size={12} />
-                    </button>
-                  </motion.div>
-                ))}
-              </AnimatePresence>
+                    <FaTimes size={12} />
+                  </button>
+                </div>
+              ))}
             </div>
           </div>
         )}

@@ -1,6 +1,5 @@
 'use client';
 
-import { motion } from 'framer-motion';
 import { FaCloudDownloadAlt, FaPlus } from 'react-icons/fa';
 import { ReactNode } from 'react';
 
@@ -68,11 +67,7 @@ export function EmptyState({
   const classes = colorClasses[color];
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className={`${classes.bg} p-6 rounded-xl border ${classes.border} text-center`}
-    >
+    <div className={`${classes.bg} p-6 rounded-xl border ${classes.border} text-center animate-fade-in`}>
       <div className="flex flex-col items-center">
         <div className={`${classes.iconBg} p-4 rounded-full mb-4 inline-flex`}>
           {icon}
@@ -87,17 +82,15 @@ export function EmptyState({
         </p>
         
         {actionLabel && onAction && (
-          <motion.button
-            whileHover={{ scale: 1.03 }}
-            whileTap={{ scale: 0.97 }}
+          <button
             onClick={onAction}
-            className={`${classes.button} px-4 py-2 rounded-full text-sm font-medium inline-flex items-center transition-colors`}
+            className={`${classes.button} px-4 py-2 rounded-full text-sm font-medium inline-flex items-center transition-all hover:scale-105 active:scale-95`}
           >
             <FaPlus className="mr-2 text-xs" />
             {actionLabel}
-          </motion.button>
+          </button>
         )}
       </div>
-    </motion.div>
+    </div>
   );
 } 

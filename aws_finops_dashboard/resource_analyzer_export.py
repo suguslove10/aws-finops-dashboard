@@ -120,12 +120,12 @@ def export_to_pdf(data: Dict[str, Any], output_file: str, currency: str = "USD")
     Returns:
         Path to the exported file
     """
-    # Initialize PDF document
+    # Initialize PDF document with landscape orientation for more width
     doc = SimpleDocTemplate(
         output_file,
         pagesize=landscape(letter),
-        rightMargin=30,
-        leftMargin=30,
+        rightMargin=20,  # Reduced margins for more space
+        leftMargin=20,
         topMargin=30,
         bottomMargin=30
     )
@@ -134,7 +134,9 @@ def export_to_pdf(data: Dict[str, Any], output_file: str, currency: str = "USD")
     styles = getSampleStyleSheet()
     
     # Add title and date
-    title = Paragraph(f"AWS Unused Resources Report", styles['Title'])
+    title_style = styles['Title']
+    title_style.fontSize = 16  # Slightly smaller title for more space
+    title = Paragraph(f"AWS Unused Resources Report", title_style)
     elements.append(title)
     
     # Add report generation date
@@ -147,8 +149,12 @@ def export_to_pdf(data: Dict[str, Any], output_file: str, currency: str = "USD")
     account_paragraph = Paragraph(f"AWS Account: {account_id}", styles['Normal'])
     elements.append(account_paragraph)
     
+    # Add currency information
+    currency_paragraph = Paragraph(f"Currency: {currency}", styles['Normal'])
+    elements.append(currency_paragraph)
+    
     # Add spacing
-    elements.append(Spacer(1, 20))
+    elements.append(Spacer(1, 15))
     
     # Add summary section
     total_resources = data.get('total_resources', 0)
@@ -184,122 +190,169 @@ def export_to_pdf(data: Dict[str, Any], output_file: str, currency: str = "USD")
     ]))
     
     elements.append(summary_table)
-    elements.append(Spacer(1, 20))
+    elements.append(Spacer(1, 15))
     
     # Add EC2 Instances section
     if data.get('ec2_instances'):
         ec2_title = Paragraph("Unused or Underutilized EC2 Instances", styles['Heading2'])
         elements.append(ec2_title)
         
-        ec2_data = [["Instance ID", "Name", "Region", "State", "Utilization", "Monthly Cost", "Recommendation"]]
+        # More descriptive header with proper capitalization
+        ec2_data = [["Instance ID", "Name", "Region", "State", "Utilization", f"Cost ({currency})", "Action"]]
         
         for instance in data.get('ec2_instances', []):
             # Convert cost to selected currency
             cost = convert_currency(instance['estimated_monthly_cost'], "USD", currency)
             cost_formatted = format_currency(cost, currency)
             
+            # Truncate name if too long
+            name = instance.get('name', 'Unnamed')
+            if len(name) > 20:
+                name = name[:18] + '...'
+            
+            # Shorten recommendations for better fit
+            recommendation = instance['recommendation']
+            if len(recommendation) > 60:
+                recommendation = recommendation[:57] + '...'
+            
+            # Format state (capitalize first letter)
+            state = instance['state'].capitalize()
+                
             ec2_data.append([
                 instance['resource_id'],
-                instance.get('name', 'Unnamed'),
+                name,
                 instance['region'],
-                instance['state'],
+                state,
                 instance.get('utilization', f"{instance['days_unused']} days"),
                 cost_formatted,
-                instance['recommendation']
+                recommendation
             ])
         
-        # Adjust column widths for better formatting
-        ec2_table = Table(ec2_data, colWidths=[95, 70, 60, 60, 75, 75, 215])
+        # Better column widths distribution - adjusted for content
+        col_widths = [90, 80, 60, 60, 80, 70, 200]
+        ec2_table = Table(ec2_data, colWidths=col_widths, repeatRows=1)
         ec2_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
             ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 8),  # Reduced padding
+            ('TOPPADDING', (0, 0), (-1, -1), 4),    # Added top padding
             ('BACKGROUND', (0, 1), (-1, -1), colors.white),
             ('GRID', (0, 0), (-1, -1), 1, colors.black),
-            ('WORDWRAP', (0, 0), (-1, -1), True), # Enable word wrapping
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),  # Align content to top
+            ('WORDWRAP', (0, 0), (-1, -1), True),   # Enable word wrapping 
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),    # Align content to top
+            ('FONTSIZE', (0, 0), (-1, -1), 8),      # Slightly smaller font
         ]))
         
         elements.append(ec2_table)
-        elements.append(Spacer(1, 20))
+        elements.append(Spacer(1, 15))
     
-    # Add EBS Volumes section
+    # Add EBS Volumes section with similar improvements
     if data.get('ebs_volumes'):
         ebs_title = Paragraph("Unused EBS Volumes", styles['Heading2'])
         elements.append(ebs_title)
         
-        ebs_data = [["Volume ID", "Name", "Region", "Size", "Type", "Days Unused", "Monthly Cost", "Recommendation"]]
+        ebs_data = [[
+            "Volume ID", "Name", "Region", "Size", 
+            "Type", "Days Unused", f"Cost ({currency})", "Action"
+        ]]
         
         for volume in data.get('ebs_volumes', []):
             # Convert cost to selected currency
             cost = convert_currency(volume['estimated_monthly_cost'], "USD", currency)
             cost_formatted = format_currency(cost, currency)
             
+            # Truncate name if too long
+            name = volume.get('name', 'Unnamed')
+            if len(name) > 15:
+                name = name[:13] + '...'
+                
+            # Shorten recommendations
+            recommendation = volume['recommendation']
+            if len(recommendation) > 50:
+                recommendation = recommendation[:47] + '...'
+                
             ebs_data.append([
                 volume['resource_id'],
-                volume.get('name', 'Unnamed'),
+                name,
                 volume['region'],
                 volume['size'],
                 volume['volume_type'],
                 str(volume['days_unused']),
                 cost_formatted,
-                volume['recommendation']
+                recommendation
             ])
         
-        # Adjust column widths for better formatting
-        ebs_table = Table(ebs_data, colWidths=[80, 70, 60, 45, 55, 60, 70, 210])
+        # Better column widths distribution
+        col_widths = [80, 60, 55, 45, 45, 50, 70, 185]
+        ebs_table = Table(ebs_data, colWidths=col_widths, repeatRows=1)
         ebs_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
             ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
             ('BACKGROUND', (0, 1), (-1, -1), colors.white),
             ('GRID', (0, 0), (-1, -1), 1, colors.black),
-            ('WORDWRAP', (0, 0), (-1, -1), True), # Enable word wrapping
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),  # Align content to top
+            ('WORDWRAP', (0, 0), (-1, -1), True),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('FONTSIZE', (0, 0), (-1, -1), 8),
         ]))
         
         elements.append(ebs_table)
-        elements.append(Spacer(1, 20))
+        elements.append(Spacer(1, 15))
     
-    # Add Elastic IPs section
+    # Add Elastic IPs section with similar improvements
     if data.get('elastic_ips'):
         eip_title = Paragraph("Unused Elastic IPs", styles['Heading2'])
         elements.append(eip_title)
         
-        eip_data = [["Allocation ID", "Public IP", "Region", "Monthly Cost", "Recommendation"]]
+        eip_data = [["Allocation ID", "Public IP", "Region", f"Cost ({currency})", "Action"]]
         
         for eip in data.get('elastic_ips', []):
             # Convert cost to selected currency
             cost = convert_currency(eip['estimated_monthly_cost'], "USD", currency)
             cost_formatted = format_currency(cost, currency)
             
+            # Shorten recommendations
+            recommendation = eip['recommendation']
+            if len(recommendation) > 80:
+                recommendation = recommendation[:77] + '...'
+                
             eip_data.append([
                 eip['resource_id'],
                 eip['public_ip'],
                 eip['region'],
                 cost_formatted,
-                eip['recommendation']
+                recommendation
             ])
         
-        # Adjust column widths for better formatting
-        eip_table = Table(eip_data, colWidths=[120, 120, 80, 90, 240])
+        # Better column widths distribution
+        col_widths = [110, 110, 80, 90, 240]
+        eip_table = Table(eip_data, colWidths=col_widths, repeatRows=1)
         eip_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
             ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
             ('BACKGROUND', (0, 1), (-1, -1), colors.white),
             ('GRID', (0, 0), (-1, -1), 1, colors.black),
-            ('WORDWRAP', (0, 0), (-1, -1), True), # Enable word wrapping
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),  # Align content to top
+            ('WORDWRAP', (0, 0), (-1, -1), True),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('FONTSIZE', (0, 0), (-1, -1), 8),
         ]))
         
         elements.append(eip_table)
+    
+    # Add a footer with a note about the currency
+    elements.append(Spacer(1, 20))
+    footer_text = f"All costs are displayed in {currency}. Report generated by AWS FinOps Dashboard."
+    footer = Paragraph(footer_text, styles['Italic'])
+    elements.append(footer)
     
     # Build PDF
     doc.build(elements)
