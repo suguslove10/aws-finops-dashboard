@@ -13,6 +13,8 @@ import { Task, runTask } from '@/lib/api';
 import { Button, Card, Title, Text, Switch } from '@tremor/react';
 import { motion } from 'framer-motion';
 import { FaCog, FaChartLine, FaCalendarAlt, FaLightbulb, FaBookmark } from 'react-icons/fa';
+import TagAnalyzerOptions, { TagAnalyzerOptions as TagAnalyzerOptionsType } from '@/components/TagAnalyzerOptions';
+import ResourceAnalyzerOptions, { ResourceAnalyzerOptions as ResourceAnalyzerOptionsType } from '@/components/ResourceAnalyzerOptions';
 
 export default function Home() {
   const router = useRouter();
@@ -130,6 +132,64 @@ export default function Home() {
       alert('Failed to start task. Please check console for details.');
       setIsTaskRunning(false);
     }
+  };
+
+  const handleTagAnalyzerSubmit = (options: TagAnalyzerOptionsType) => {
+    if (selectedProfiles.length === 0 || selectedRegions.length === 0) {
+      alert('Please select at least one profile and one region.');
+      return;
+    }
+
+    setIsTaskRunning(true);
+    setSelectedTask({ id: 'tag_analyzer', name: 'Tag Analyzer', description: 'Analyze resources and costs by tags' });
+    
+    const tagStrings = options.tags.map(tag => 
+      tag.value ? `${tag.key}=${tag.value}` : tag.key
+    );
+    
+    runTask({
+      task_type: 'tag_analyzer',
+      profiles: selectedProfiles,
+      regions: selectedRegions,
+      combine: combineProfiles,
+      report_name: reportName,
+      formats: options.reportFormat,
+      currency: options.currency,
+      tag: tagStrings,
+      time_range: options.timeRange
+    }).catch(error => {
+      console.error('Failed to start tag analyzer task:', error);
+      alert('Failed to start task. Please check console for details.');
+      setIsTaskRunning(false);
+    });
+  };
+
+  const handleResourceAnalyzerSubmit = (options: ResourceAnalyzerOptionsType) => {
+    if (selectedProfiles.length === 0 || selectedRegions.length === 0) {
+      alert('Please select at least one profile and one region.');
+      return;
+    }
+
+    setIsTaskRunning(true);
+    setSelectedTask({ id: 'resource_analyzer', name: 'Resource Analyzer', description: 'Identify unused or underutilized AWS resources' });
+    
+    runTask({
+      task_type: 'resource_analyzer',
+      profiles: selectedProfiles,
+      regions: selectedRegions,
+      combine: combineProfiles,
+      report_name: reportName,
+      formats: ['json', 'pdf'],
+      currency: options.currency,
+      lookback_days: options.lookbackPeriod,
+      cpu_threshold: options.cpuThreshold,
+      resource_types: options.resourceTypes,
+      time_range: options.lookbackPeriod
+    }).catch(error => {
+      console.error('Failed to start resource analyzer task:', error);
+      alert('Failed to start task. Please check console for details.');
+      setIsTaskRunning(false);
+    });
   };
 
   return (
@@ -292,284 +352,332 @@ export default function Home() {
                 )}
                 
                 {wizardStep === 3 && (
-                  <motion.div
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: 20 }}
-                    transition={{ duration: 0.3 }}
-                  >
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                      <CurrencySelector 
-                        selectedCurrency={selectedCurrency}
-                        onSelectCurrency={setSelectedCurrency}
-                      />
-                    
-                      <Card className="shadow-md border border-gray-200 dark:border-gray-700 transition-all duration-300 hover:shadow-lg">
-                        <div className="px-1 py-2">
-                          <Title className="text-xl font-bold text-gray-900 dark:text-white">Report Options</Title>
-                          <Text className="mt-2 mb-4 text-gray-600 dark:text-gray-300">Configure how you want your report generated</Text>
-                          
-                          <div className="mb-6">
-                            <label htmlFor="reportName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                              Report Name
-                            </label>
-                            <input
-                              type="text"
-                              id="reportName"
-                              value={reportName}
-                              onChange={(e) => setReportName(e.target.value)}
-                              className="block w-full rounded-lg border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:text-white sm:text-sm transition-colors duration-200"
-                            />
-                          </div>
-                          
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Report Formats</label>
-                            <div className="flex flex-wrap gap-4">
-                              {['csv', 'json', 'pdf'].map((format) => (
-                                <div key={format} className="flex items-center">
-                                  <input
-                                    type="checkbox"
-                                    id={`format-${format}`}
-                                    checked={selectedFormats.includes(format)}
-                                    onChange={(e) => {
-                                      if (e.target.checked) {
-                                        setSelectedFormats([...selectedFormats, format]);
-                                      } else {
-                                        setSelectedFormats(selectedFormats.filter((f) => f !== format));
-                                      }
-                                    }}
-                                    className="mr-2 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
-                                  />
-                                  <label htmlFor={`format-${format}`} className="text-sm text-gray-800 dark:text-gray-200 uppercase">
-                                    {format}
-                                  </label>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                          
-                          <div className="mt-6">
-                            <label className="flex items-center justify-between text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                              <span>Time Range (days)</span>
-                              <span className="text-blue-600 dark:text-blue-400">{timeRange} days</span>
-                            </label>
-                            <input
-                              type="range"
-                              min="7"
-                              max="90"
-                              step="1"
-                              value={timeRange}
-                              onChange={(e) => setTimeRange(parseInt(e.target.value))}
-                              className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer"
-                            />
-                            <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
-                              <span>7</span>
-                              <span>30</span>
-                              <span>60</span>
-                              <span>90</span>
-                            </div>
-                          </div>
-                        </div>
-                      </Card>
-                    </div>
-                    
-                    <TagSelector
-                      selectedTags={selectedTags}
-                      onSelectTags={setSelectedTags}
-                    />
-                    
-                    <div className="mb-6">
-                      <button
-                        onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
-                        className="flex items-center gap-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-medium"
+                  <>
+                    {selectedTask?.id === 'tag_analyzer' && (
+                      <motion.div
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: 20 }}
+                        transition={{ duration: 0.3 }}
                       >
-                        <FaCog className={`transition-transform ${showAdvancedOptions ? 'rotate-90' : ''}`} />
-                        {showAdvancedOptions ? 'Hide Advanced Options' : 'Show Advanced Options'}
-                      </button>
-                      
-                      {showAdvancedOptions && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          exit={{ opacity: 0, height: 0 }}
-                          className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-4 space-y-6"
-                        >
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <Card className="shadow-md">
-                              <div className="px-1 py-2">
-                                <Title className="text-lg font-bold flex items-center gap-2">
-                                  <FaChartLine className="text-blue-500" />
-                                  <span>Analysis Options</span>
-                                </Title>
-                                
-                                <div className="mt-4 space-y-4">
-                                  <div className="flex items-center justify-between">
-                                    <div>
-                                      <p className="font-medium text-gray-800 dark:text-gray-200">Enhanced PDF Report</p>
-                                      <p className="text-xs text-gray-500 dark:text-gray-400">Generate PDF with visualizations and executive summary</p>
-                                    </div>
-                                    <Switch
-                                      id="enhanced-pdf"
-                                      name="enhanced-pdf"
-                                      checked={enhancedPdf}
-                                      onChange={setEnhancedPdf}
-                                      color="blue"
-                                    />
-                                  </div>
-                                  
-                                  <div className="flex items-center justify-between">
-                                    <div>
-                                      <p className="font-medium text-gray-800 dark:text-gray-200">Skip RI Analysis</p>
-                                      <p className="text-xs text-gray-500 dark:text-gray-400">Skip Reserved Instance analysis in optimization</p>
-                                    </div>
-                                    <Switch
-                                      id="skip-ri"
-                                      name="skip-ri"
-                                      checked={skipRiAnalysis}
-                                      onChange={setSkipRiAnalysis}
-                                      color="blue"
-                                    />
-                                  </div>
-                                  
-                                  <div className="flex items-center justify-between">
-                                    <div>
-                                      <p className="font-medium text-gray-800 dark:text-gray-200">Skip Savings Plans</p>
-                                      <p className="text-xs text-gray-500 dark:text-gray-400">Skip Savings Plans analysis in optimization</p>
-                                    </div>
-                                    <Switch
-                                      id="skip-savings"
-                                      name="skip-savings"
-                                      checked={skipSavingsPlans}
-                                      onChange={setSkipSavingsPlans}
-                                      color="blue"
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-                            </Card>
-                            
-                            <Card className="shadow-md">
-                              <div className="px-1 py-2">
-                                <Title className="text-lg font-bold flex items-center gap-2">
-                                  <FaCalendarAlt className="text-blue-500" />
-                                  <span>Threshold Settings</span>
-                                </Title>
-                                
-                                <div className="mt-4 space-y-4">
-                                  <div>
-                                    <label className="flex items-center justify-between text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                      <span>CPU Threshold (%)</span>
-                                      <span>{cpuThreshold}%</span>
-                                    </label>
-                                    <input
-                                      type="range"
-                                      min="10"
-                                      max="90"
-                                      step="5"
-                                      value={cpuThreshold}
-                                      onChange={(e) => setCpuThreshold(parseInt(e.target.value))}
-                                      className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg"
-                                    />
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                      For EC2 right-sizing recommendations
-                                    </p>
-                                  </div>
-                                  
-                                  <div>
-                                    <label className="flex items-center justify-between text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                      <span>Anomaly Sensitivity</span>
-                                      <span>{anomalySensitivity}</span>
-                                    </label>
-                                    <input
-                                      type="range"
-                                      min="0.01"
-                                      max="0.1"
-                                      step="0.01"
-                                      value={anomalySensitivity}
-                                      onChange={(e) => setAnomalySensitivity(parseFloat(e.target.value))}
-                                      className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg"
-                                    />
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                      Lower values are more sensitive to anomalies
-                                    </p>
-                                  </div>
-                                  
-                                  <div>
-                                    <label className="flex items-center justify-between text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                      <span>Lookback Days</span>
-                                      <span>{lookbackDays} days</span>
-                                    </label>
-                                    <input
-                                      type="range"
-                                      min="7"
-                                      max="90"
-                                      step="1"
-                                      value={lookbackDays}
-                                      onChange={(e) => setLookbackDays(parseInt(e.target.value))}
-                                      className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg"
-                                    />
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                      For RI and Savings Plan recommendations
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
-                            </Card>
-                          </div>
-                        </motion.div>
-                      )}
-                    </div>
-                    
-                    <div className="flex justify-between mt-8">
-                      <Button
-                        size="lg"
-                        color="gray"
-                        onClick={prevStep}
-                        className="px-8"
-                      >
-                        Back
-                      </Button>
-                      <motion.button 
-                        disabled={!isStepValid()}
-                        onClick={handleStartTask}
-                        whileHover={{ scale: 1.03 }}
-                        whileTap={{ scale: 0.97 }}
-                        className={`
-                          relative overflow-hidden group flex items-center gap-3 px-8 py-3.5 
-                          font-medium text-white rounded-xl shadow-lg
-                          transition-all duration-300
-                          ${!isStepValid()
-                            ? 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed opacity-60'
-                            : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700'
-                          }
-                        `}
-                      >
-                        <span className="relative z-10 flex items-center">
-                          <svg 
-                            className="w-5 h-5 mr-2" 
-                            fill="none" 
-                            viewBox="0 0 24 24" 
-                            stroke="currentColor"
+                        <TagAnalyzerOptions onSubmit={handleTagAnalyzerSubmit} />
+                        
+                        <div className="flex justify-between mt-6">
+                          <Button
+                            size="lg"
+                            color="gray"
+                            onClick={prevStep}
+                            className="px-8"
                           >
-                            <path 
-                              strokeLinecap="round" 
-                              strokeLinejoin="round" 
-                              strokeWidth={2} 
-                              d="M13 10V3L4 14h7v7l9-11h-7z" 
-                            />
-                          </svg>
-                          Run Task
-                        </span>
-                        <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-indigo-500 to-blue-500 opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
-                        <div className="absolute right-0 top-0 bottom-0 w-12 bg-gradient-to-l from-white/20 to-transparent transform translate-x-12 group-hover:translate-x-0 transition-transform duration-300"></div>
-                      </motion.button>
-                    </div>
-                  </motion.div>
+                            Back
+                          </Button>
+                        </div>
+                      </motion.div>
+                    )}
+                    
+                    {selectedTask?.id === 'resource_analyzer' && (
+                      <motion.div
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: 20 }}
+                        transition={{ duration: 0.3 }}
+                      >
+                        <ResourceAnalyzerOptions onSubmit={handleResourceAnalyzerSubmit} />
+                        
+                        <div className="flex justify-between mt-6">
+                          <Button
+                            size="lg"
+                            color="gray"
+                            onClick={prevStep}
+                            className="px-8"
+                          >
+                            Back
+                          </Button>
+                        </div>
+                      </motion.div>
+                    )}
+                    
+                    {selectedTask?.id !== 'tag_analyzer' && selectedTask?.id !== 'resource_analyzer' && (
+                      <motion.div
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: 20 }}
+                        transition={{ duration: 0.3 }}
+                      >
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                          <CurrencySelector 
+                            selectedCurrency={selectedCurrency}
+                            onSelectCurrency={setSelectedCurrency}
+                          />
+                        
+                          <Card className="shadow-md border border-gray-200 dark:border-gray-700 transition-all duration-300 hover:shadow-lg">
+                            <div className="px-1 py-2">
+                              <Title className="text-xl font-bold text-gray-900 dark:text-white">Report Options</Title>
+                              <Text className="mt-2 mb-4 text-gray-600 dark:text-gray-300">Configure how you want your report generated</Text>
+                              
+                              <div className="mb-6">
+                                <label htmlFor="reportName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                  Report Name
+                                </label>
+                                <input
+                                  type="text"
+                                  id="reportName"
+                                  value={reportName}
+                                  onChange={(e) => setReportName(e.target.value)}
+                                  className="block w-full rounded-lg border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:text-white sm:text-sm transition-colors duration-200"
+                                />
+                              </div>
+                              
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Report Formats</label>
+                                <div className="flex flex-wrap gap-4">
+                                  {['csv', 'json', 'pdf'].map((format) => (
+                                    <div key={format} className="flex items-center">
+                                      <input
+                                        type="checkbox"
+                                        id={`format-${format}`}
+                                        checked={selectedFormats.includes(format)}
+                                        onChange={(e) => {
+                                          if (e.target.checked) {
+                                            setSelectedFormats([...selectedFormats, format]);
+                                          } else {
+                                            setSelectedFormats(selectedFormats.filter((f) => f !== format));
+                                          }
+                                        }}
+                                        className="mr-2 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
+                                      />
+                                      <label htmlFor={`format-${format}`} className="text-sm text-gray-800 dark:text-gray-200 uppercase">
+                                        {format}
+                                      </label>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                              
+                              <div className="mt-6">
+                                <label className="flex items-center justify-between text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                  <span>Time Range (days)</span>
+                                  <span className="text-blue-600 dark:text-blue-400">{timeRange} days</span>
+                                </label>
+                                <input
+                                  type="range"
+                                  min="7"
+                                  max="90"
+                                  step="1"
+                                  value={timeRange}
+                                  onChange={(e) => setTimeRange(parseInt(e.target.value))}
+                                  className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                                />
+                                <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                  <span>7</span>
+                                  <span>30</span>
+                                  <span>60</span>
+                                  <span>90</span>
+                                </div>
+                              </div>
+                            </div>
+                          </Card>
+                        </div>
+                        
+                        <TagSelector
+                          selectedTags={selectedTags}
+                          onSelectTags={setSelectedTags}
+                        />
+                        
+                        <div className="mb-6">
+                          <button
+                            onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
+                            className="flex items-center gap-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-medium"
+                          >
+                            <FaCog className={`transition-transform ${showAdvancedOptions ? 'rotate-90' : ''}`} />
+                            {showAdvancedOptions ? 'Hide Advanced Options' : 'Show Advanced Options'}
+                          </button>
+                          
+                          {showAdvancedOptions && (
+                            <motion.div
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: 'auto' }}
+                              exit={{ opacity: 0, height: 0 }}
+                              className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-4 space-y-6"
+                            >
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <Card className="shadow-md">
+                                  <div className="px-1 py-2">
+                                    <Title className="text-lg font-bold flex items-center gap-2">
+                                      <FaChartLine className="text-blue-500" />
+                                      <span>Analysis Options</span>
+                                    </Title>
+                                    
+                                    <div className="mt-4 space-y-4">
+                                      <div className="flex items-center justify-between">
+                                        <div>
+                                          <p className="font-medium text-gray-800 dark:text-gray-200">Enhanced PDF Report</p>
+                                          <p className="text-xs text-gray-500 dark:text-gray-400">Generate PDF with visualizations and executive summary</p>
+                                        </div>
+                                        <Switch
+                                          id="enhanced-pdf"
+                                          name="enhanced-pdf"
+                                          checked={enhancedPdf}
+                                          onChange={setEnhancedPdf}
+                                          color="blue"
+                                        />
+                                      </div>
+                                      
+                                      <div className="flex items-center justify-between">
+                                        <div>
+                                          <p className="font-medium text-gray-800 dark:text-gray-200">Skip RI Analysis</p>
+                                          <p className="text-xs text-gray-500 dark:text-gray-400">Skip Reserved Instance analysis in optimization</p>
+                                        </div>
+                                        <Switch
+                                          id="skip-ri"
+                                          name="skip-ri"
+                                          checked={skipRiAnalysis}
+                                          onChange={setSkipRiAnalysis}
+                                          color="blue"
+                                        />
+                                      </div>
+                                      
+                                      <div className="flex items-center justify-between">
+                                        <div>
+                                          <p className="font-medium text-gray-800 dark:text-gray-200">Skip Savings Plans</p>
+                                          <p className="text-xs text-gray-500 dark:text-gray-400">Skip Savings Plans analysis in optimization</p>
+                                        </div>
+                                        <Switch
+                                          id="skip-savings"
+                                          name="skip-savings"
+                                          checked={skipSavingsPlans}
+                                          onChange={setSkipSavingsPlans}
+                                          color="blue"
+                                        />
+                                      </div>
+                                    </div>
+                                  </div>
+                                </Card>
+                                
+                                <Card className="shadow-md">
+                                  <div className="px-1 py-2">
+                                    <Title className="text-lg font-bold flex items-center gap-2">
+                                      <FaCalendarAlt className="text-blue-500" />
+                                      <span>Threshold Settings</span>
+                                    </Title>
+                                    
+                                    <div className="mt-4 space-y-4">
+                                      <div>
+                                        <label className="flex items-center justify-between text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                          <span>CPU Threshold (%)</span>
+                                          <span>{cpuThreshold}%</span>
+                                        </label>
+                                        <input
+                                          type="range"
+                                          min="10"
+                                          max="90"
+                                          step="5"
+                                          value={cpuThreshold}
+                                          onChange={(e) => setCpuThreshold(parseInt(e.target.value))}
+                                          className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg"
+                                        />
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                          For EC2 right-sizing recommendations
+                                        </p>
+                                      </div>
+                                      
+                                      <div>
+                                        <label className="flex items-center justify-between text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                          <span>Anomaly Sensitivity</span>
+                                          <span>{anomalySensitivity}</span>
+                                        </label>
+                                        <input
+                                          type="range"
+                                          min="0.01"
+                                          max="0.1"
+                                          step="0.01"
+                                          value={anomalySensitivity}
+                                          onChange={(e) => setAnomalySensitivity(parseFloat(e.target.value))}
+                                          className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg"
+                                        />
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                          Lower values are more sensitive to anomalies
+                                        </p>
+                                      </div>
+                                      
+                                      <div>
+                                        <label className="flex items-center justify-between text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                          <span>Lookback Days</span>
+                                          <span>{lookbackDays} days</span>
+                                        </label>
+                                        <input
+                                          type="range"
+                                          min="7"
+                                          max="90"
+                                          step="1"
+                                          value={lookbackDays}
+                                          onChange={(e) => setLookbackDays(parseInt(e.target.value))}
+                                          className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg"
+                                        />
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                          For RI and Savings Plan recommendations
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </Card>
+                              </div>
+                            </motion.div>
+                          )}
+                        </div>
+                        
+                        <div className="flex justify-between mt-8">
+                          <Button
+                            size="lg"
+                            color="gray"
+                            onClick={prevStep}
+                            className="px-8"
+                          >
+                            Back
+                          </Button>
+                          <motion.button 
+                            disabled={!isStepValid()}
+                            onClick={handleStartTask}
+                            whileHover={{ scale: 1.03 }}
+                            whileTap={{ scale: 0.97 }}
+                            className={`
+                              relative overflow-hidden group flex items-center gap-3 px-8 py-3.5 
+                              font-medium text-white rounded-xl shadow-lg
+                              transition-all duration-300
+                              ${!isStepValid()
+                                ? 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed opacity-60'
+                                : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700'
+                              }
+                            `}
+                          >
+                            <span className="relative z-10 flex items-center">
+                              <svg 
+                                className="w-5 h-5 mr-2" 
+                                fill="none" 
+                                viewBox="0 0 24 24" 
+                                stroke="currentColor"
+                              >
+                                <path 
+                                  strokeLinecap="round" 
+                                  strokeLinejoin="round" 
+                                  strokeWidth={2} 
+                                  d="M13 10V3L4 14h7v7l9-11h-7z" 
+                                />
+                              </svg>
+                              Run Task
+                            </span>
+                            <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-indigo-500 to-blue-500 opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
+                            <div className="absolute right-0 top-0 bottom-0 w-12 bg-gradient-to-l from-white/20 to-transparent transform translate-x-12 group-hover:translate-x-0 transition-transform duration-300"></div>
+                          </motion.button>
+                        </div>
+                      </motion.div>
+                    )}
+                  </>
                 )}
               </>
             ) : (
               <TaskOutput 
-                taskType="dashboard" 
+                taskType={selectedTask?.id || 'dashboard'} 
                 onViewResults={() => router.push('/previous-results')}
               />
             )}

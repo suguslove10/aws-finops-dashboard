@@ -20,18 +20,24 @@ export function TaskOutput({ taskType = 'dashboard', onViewResults }: TaskOutput
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<TerminalType | null>(null);
   const [isTerminalReady, setIsTerminalReady] = useState(false);
-  const [lastOutput, setLastOutput] = useState('');
   const [isRunningCommand, setIsRunningCommand] = useState(false);
   const [commandOutput, setCommandOutput] = useState<string | null>(null);
 
   // Keep the query but don't rely on it for UI state
-  const { refetch } = useQuery<TaskResult>({
+  const { refetch, data: taskStatusData } = useQuery<TaskResult>({
     queryKey: ['taskStatus', taskType],
     queryFn: () => fetchTaskStatus(taskType),
     refetchInterval: 3000,
     refetchIntervalInBackground: false,
     enabled: !!taskType,
   });
+  
+  // Debug logging to see task status data
+  useEffect(() => {
+    if (taskStatusData) {
+      console.log(`Task Status for ${taskType}:`, taskStatusData);
+    }
+  }, [taskStatusData, taskType]);
 
   // Simplified terminal initialization with dynamic imports
   useEffect(() => {
@@ -43,11 +49,11 @@ export function TaskOutput({ taskType = 'dashboard', onViewResults }: TaskOutput
         const xtermModule = await import('@xterm/xterm');
         const fitAddonModule = await import('@xterm/addon-fit');
         const webLinksAddonModule = await import('@xterm/addon-web-links');
-        
+
         const Terminal = xtermModule.Terminal;
         const FitAddon = fitAddonModule.FitAddon;
         const WebLinksAddon = webLinksAddonModule.WebLinksAddon;
-        
+
         // Clear any existing terminal
         if (xtermRef.current) {
           xtermRef.current.dispose();
@@ -58,10 +64,10 @@ export function TaskOutput({ taskType = 'dashboard', onViewResults }: TaskOutput
         
         // Create terminal with better settings for ASCII tables
         const term = new Terminal({
-          fontFamily: 'Courier, monospace',
+          fontFamily: '"Courier New", monospace',
           fontSize: 14,
-          letterSpacing: 0,
-          lineHeight: 1,
+          letterSpacing: 0.8, // Slightly wider for better ASCII art rendering
+          lineHeight: 1.3, // Slightly taller for better readability
           theme: {
             background: '#000000',
             foreground: '#ffffff',
@@ -73,12 +79,23 @@ export function TaskOutput({ taskType = 'dashboard', onViewResults }: TaskOutput
             magenta: '#ff33ff',
             cyan: '#33ffff',
             white: '#ffffff',
+            brightBlack: '#555555',
+            brightRed: '#ff5555',
+            brightGreen: '#55ff55',
+            brightYellow: '#ffff55',
+            brightBlue: '#5555ff',
+            brightMagenta: '#ff55ff',
+            brightCyan: '#55ffff',
+            brightWhite: '#ffffff',
           },
           cursorBlink: false,
           scrollback: 10000,
           convertEol: true,
-          cols: 132,
-          rows: 40
+          allowTransparency: false,
+          cols: 120, // Wider for ASCII tables
+          rows: 40,
+          disableStdin: true,
+          drawBoldTextInBrightColors: true
         });
         
         // Create fit addon
@@ -89,9 +106,18 @@ export function TaskOutput({ taskType = 'dashboard', onViewResults }: TaskOutput
         // Store reference
         xtermRef.current = term;
         
-        // Open terminal - ensure terminalRef is not null before accessing
+        // Open terminal
         if (terminalRef.current) {
           term.open(terminalRef.current);
+          
+          // Set some additional styles on the terminal DOM
+          if (terminalRef.current.querySelector('.xterm-screen')) {
+            const screen = terminalRef.current.querySelector('.xterm-screen') as HTMLElement;
+            if (screen) {
+              screen.style.display = 'block';
+              screen.style.width = '100%';
+            }
+          }
           
           // Fit terminal to container
           setTimeout(() => {
@@ -140,49 +166,93 @@ export function TaskOutput({ taskType = 'dashboard', onViewResults }: TaskOutput
   }, [commandOutput, isTerminalReady]);
 
   // Run the AWS command
-  const startDashboardTask = async () => {
+  const startTask = async () => {
     if (!isTerminalReady || !xtermRef.current) {
       console.error("Terminal not ready");
       return;
     }
     
+    setIsRunningCommand(true);
+    
     try {
-      setIsRunningCommand(true);
-      
       // Clear terminal and show starting message
       xtermRef.current.clear();
-      xtermRef.current.write('Starting AWS FinOps Dashboard...\r\n\r\n');
+      const taskName = taskType.charAt(0).toUpperCase() + taskType.slice(1).replace('_', ' ');
+      xtermRef.current.write(`Starting AWS FinOps ${taskName}...\r\n\r\n`);
       
-      // Call API endpoint
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001'}/api/run_aws_cli`, {
+      console.log("Sending request to API...");
+      console.log(`Running task type: ${taskType} with command: aws-finops --profiles suguresh --force-color ${taskType === 'resource_analyzer' ? '--resource-analyzer' : 
+                    taskType === 'tag_analyzer' ? '--tag-analyzer' : 
+                    taskType === 'trend' ? '--trend' : 
+                    taskType === 'dashboard' ? '' : 
+                    taskType === 'audit' ? '--audit' : 
+                    taskType === 'anomalies' ? '--detect-anomalies' : 
+                    taskType === 'optimize' ? '--optimize' : 
+                    taskType === 'ri_optimizer' ? '--ri-optimizer' : ''}`);
+      
+      // Use the environment variable for API URL with fallback
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
+      console.log("Using API URL:", apiUrl);
+      
+      xtermRef.current.write('Connecting to AWS FinOps backend...\r\n');
+      xtermRef.current.write(`API URL: ${apiUrl}\r\n\r\n`);
+      
+      // Make the API call
+      const response = await fetch(`${apiUrl}/api/run_aws_cli`, {
         method: 'POST',
+        mode: 'cors',
+        cache: 'no-cache',
+        credentials: 'omit',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json'
         },
         body: JSON.stringify({
-          command: 'aws-finops --profiles suguresh --force-color',
-          task_type: 'dashboard'
+          command: `aws-finops --profiles suguresh --force-color ${taskType === 'resource_analyzer' ? '--resource-analyzer' : 
+                    taskType === 'tag_analyzer' ? '--tag-analyzer' : 
+                    taskType === 'trend' ? '--trend' : 
+                    taskType === 'dashboard' ? '' : 
+                    taskType === 'audit' ? '--audit' : 
+                    taskType === 'anomalies' ? '--detect-anomalies' : 
+                    taskType === 'optimize' ? '--optimize' : 
+                    taskType === 'ri_optimizer' ? '--ri-optimizer' : ''}`,
+          task_type: taskType || 'dashboard'
         }),
       });
       
+      console.log("API response status:", response.status);
+      
       if (!response.ok) {
-        throw new Error(`Error: ${response.statusText}`);
+        throw new Error(`Server error: ${response.status} ${response.statusText}`);
       }
       
       const result = await response.json();
-      console.log("Command output length:", result.output?.length);
+      console.log("API response received");
       
       if (result.output) {
-        setCommandOutput(result.output);
+        // Process the output to ensure line breaks and ANSI codes are preserved
+        const processedOutput = result.output
+          // Make sure we're using consistent line breaks
+          .replace(/\r?\n/g, '\r\n')
+          // Preserve any ANSI color codes
+          .replace(/\x1b\[[0-9;]*m/g, (match: string) => match);
+        
+        console.log("Terminal output received, length:", processedOutput.length);
+        
+        // Display the output
+        xtermRef.current.clear();
+        xtermRef.current.write(processedOutput);
+        setCommandOutput(processedOutput);
       } else {
-        xtermRef.current.write('No output received from command.\r\n');
+        xtermRef.current.write('\r\nNo output received from command.\r\n');
       }
-      
-      refetch();
     } catch (error) {
-      console.error("Error running command:", error);
+      console.error("API call error:", error);
       if (xtermRef.current) {
-        xtermRef.current.write(`\r\nError: ${error}\r\n`);
+        xtermRef.current.clear();
+        xtermRef.current.write(`Error connecting to backend: ${error}\r\n\r\n`);
+        xtermRef.current.write('Please make sure the backend server is running at the correct URL.\r\n');
+        xtermRef.current.write('Check the console for more details.\r\n');
       }
     } finally {
       setIsRunningCommand(false);
@@ -220,7 +290,7 @@ export function TaskOutput({ taskType = 'dashboard', onViewResults }: TaskOutput
                 size="sm"
                 onClick={() => {
                   if (xtermRef.current && isTerminalReady) {
-                    startDashboardTask();
+                    startTask();
                   } else {
                     window.location.reload();
                   }
@@ -260,22 +330,25 @@ export function TaskOutput({ taskType = 'dashboard', onViewResults }: TaskOutput
           </div>
 
           {/* Terminal Container */}
-          <div className="relative -mx-1 sm:-mx-2 w-full overflow-hidden">
+          <div className="relative -mx-1 sm:-mx-2 w-full overflow-hidden bg-black rounded-lg p-1">
             <div
               ref={terminalRef}
-              className="terminal-container bg-black text-gray-100 rounded-lg font-mono text-sm overflow-hidden"
+              className="terminal-container font-mono text-sm"
               style={{ 
                 height: '70vh',
                 minHeight: '600px',
                 width: '100%',
-                maxWidth: '100%',
-                overflow: 'hidden'
+                backgroundColor: '#000',
+                color: '#fff',
+                padding: '0',
+                margin: '0',
+                border: '1px solid #333'
               }}
             />
             
             {/* Terminal Loading State */}
             {!isTerminalReady && (
-              <div className="absolute inset-0 flex items-center justify-center bg-gray-900 bg-opacity-80 rounded-lg">
+              <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-80 rounded-lg">
                 <div className="flex flex-col items-center">
                   <FaSpinner className="animate-spin text-blue-400 mb-4 h-8 w-8" />
                   <p className="text-gray-300">Initializing terminal...</p>
@@ -292,12 +365,12 @@ export function TaskOutput({ taskType = 'dashboard', onViewResults }: TaskOutput
                   <p className="text-gray-300 mb-6">Click the button below to run the dashboard</p>
                   <Button
                     size="lg"
-                    onClick={startDashboardTask}
+                    onClick={startTask}
                     icon={isRunningCommand ? FaSpinner : FaTerminal}
                     disabled={isRunningCommand}
                     className="bg-blue-600 hover:bg-blue-700 text-white py-4 px-8 rounded-md text-lg font-bold shadow-lg transition-all"
                   >
-                    {isRunningCommand ? 'Running Command...' : 'Run Dashboard Task'}
+                    {isRunningCommand ? 'Running Command...' : `Run ${taskType.charAt(0).toUpperCase() + taskType.slice(1).replace('_', ' ')} Task`}
                   </Button>
                 </div>
               </div>

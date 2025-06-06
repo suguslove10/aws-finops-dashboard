@@ -224,7 +224,7 @@ def _run_audit_report(profiles_to_use: List[str], args: argparse.Namespace) -> N
                         console.print(
                             f"[bright_green]Successfully exported to PDF format: {pdf_path}[/]"
                         )
-
+                
 
 def _run_trend_analysis(profiles_to_use: List[str], args: argparse.Namespace) -> None:
     """Run cost trend analysis for the past 6 months."""
@@ -803,6 +803,11 @@ def _run_resource_analyzer(profiles_to_use: List[str], args: argparse.Namespace)
 def run_dashboard(args: argparse.Namespace) -> int:
     """Main function to run the AWS FinOps dashboard."""
     try:
+        # Apply force_color if specified
+        global console
+        if hasattr(args, 'force_color') and args.force_color:
+            console = Console(force_terminal=True, color_system="truecolor")
+            
         with Status("[bright_cyan]Initialising...", spinner="aesthetic", speed=0.4):
             profiles_to_use, user_regions, time_range, currency = _initialize_profiles(args)
 
@@ -813,7 +818,7 @@ def run_dashboard(args: argparse.Namespace) -> int:
         if args.trend:
             _run_trend_analysis(profiles_to_use, args)
             return 0
-            
+                
         if args.detect_anomalies:
             _run_anomaly_detection(profiles_to_use, args)
             return 0

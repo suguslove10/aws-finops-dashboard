@@ -249,6 +249,18 @@ export default function ResourceAnalyzerOptions({ onSubmit }: ResourceAnalyzerOp
           </div>
         </div>
       </Card>
+
+      {/* Add a prominent Run Analysis button */}
+      <div className="flex justify-end mt-6">
+        <Button
+          size="lg"
+          color="blue"
+          onClick={handleSubmit}
+          className="px-10 py-3 text-lg font-medium shadow-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+        >
+          Run Analysis
+        </Button>
+      </div>
     </Card>
   );
 } 

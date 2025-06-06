@@ -290,6 +290,31 @@ Running this tool incurs minimal AWS costs through API calls (typically a few ce
 
 4. **Empty cost data**: Cost Explorer API may not have data for new accounts or may take up to 24 hours to reflect recent costs
 
+## API Communication
+
+The frontend communicates with the backend through API routes in Next.js. Here's how the data flow works:
+
+### Command Execution
+- When you interact with the frontend UI (clicking buttons, submitting forms), the frontend sends requests to `/api/run-command` route
+- This route executes the AWS FinOps CLI command using child_process.exec
+- The Python backend processes AWS data and generates formatted output
+
+### Data Flow
+- The frontend sends parameters (profiles, regions, currency, etc.) to the API
+- The API constructs and executes the CLI command
+- The CLI command returns JSON or formatted text output
+- The API sends this output back to the frontend
+
+### Report Downloads
+- When downloading reports, the frontend sends a request to `/api/download-report`
+- This route finds the generated report file (CSV/JSON/PDF) and serves it
+- The file gets downloaded through the browser
+
+### Debugging Notes
+- If you're having issues, check the browser console and the terminal where you're running Next.js
+- The output from the backend should appear in the terminal and be passed back to the frontend
+- The improvements made should now be working properly - with accurate currency conversion, better error handling, and clearer display of data in the dashboard.
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.

@@ -496,12 +496,26 @@ def add_profile_with_aws_cli(profile_name, aws_access_key_id, aws_secret_access_
         print(f"Error adding profile with AWS CLI: {str(e)}")
         return False
 
-@app.route('/api/run_aws_cli', methods=['POST'])
+@app.route('/api/run_aws_cli', methods=['POST', 'OPTIONS'])
 def run_aws_cli_command():
     """Run an AWS CLI command and return the output with ANSI colors preserved."""
+    # Handle preflight OPTIONS request
+    if request.method == 'OPTIONS':
+        return '', 200
+        
     data = request.json
     command = data.get('command', '')
     task_type = data.get('task_type', 'custom')
+    
+    # If we detect a specific task type flag in the command, use that instead
+    if '--resource-analyzer' in command or '--resource_analyzer' in command:
+        task_type = 'resource_analyzer'
+    elif '--tag-analyzer' in command or '--tag_analyzer' in command:
+        task_type = 'tag_analyzer'
+    elif '--dashboard' in command:
+        task_type = 'dashboard'
+    elif '--trend' in command:
+        task_type = 'trend'
     
     if not command:
         return jsonify({'status': 'error', 'message': 'Command is required'}), 400
@@ -515,8 +529,12 @@ def run_aws_cli_command():
         if '--force-color' not in command:
             command += ' --force-color'
             
-        print(f"Executing command: {command}")
+        # Always add no-banner flag to suppress the welcome banner
+        if '--no-banner' not in command:
+            command += ' --no-banner'
             
+        print(f"Executing command: {command}")
+        
         # Set environment variables to ensure proper color and formatting output
         env = {
             **os.environ, 
@@ -529,7 +547,8 @@ def run_aws_cli_command():
             'LINES': '50',     # Set terminal height
             'AWS_COLOR': '1',  # Force AWS CLI to use color
             'CLICOLOR_FORCE': '1', # Force color even in non-interactive terminals
-            'AWS_FINOPS_FORCE_COLOR': '1' # Custom env var for our app
+            'AWS_FINOPS_FORCE_COLOR': '1', # Custom env var for our app
+            'PYTHONWARNINGS': 'ignore', # Ignore Python warnings
         }
             
         # Run the command and capture output with ANSI colors preserved
@@ -546,6 +565,11 @@ def run_aws_cli_command():
         
         # Capture the output
         output = ""
+        progress_indicators = ["Initialising", "▰", "▱"]
+        filtered_output = []
+        skip_next_lines = 0
+        banner_detected = False
+        
         while True:
             line = process.stdout.readline()
             if not line and process.poll() is not None:
@@ -553,22 +577,53 @@ def run_aws_cli_command():
             if line:
                 output += line
                 print(line, end='')  # Debug: print to server console
+                
+                # Skip ASCII banner (using pattern detection)
+                if not banner_detected and '/$$$$$' in line:
+                    banner_detected = True
+                    skip_next_lines = 12  # Skip the next 12 lines which form the banner
+                    continue
+                
+                if skip_next_lines > 0:
+                    skip_next_lines -= 1
+                    continue
+                
+                # Skip progress indicators, warnings and ASCII banner lines
+                if any(indicator in line for indicator in progress_indicators):
+                    continue
+                if "SyntaxWarning:" in line or "UserWarning:" in line:
+                    continue
+                if "pkg_resources is deprecated" in line:
+                    continue
+                if "AWS FinOps Dashboard CLI" in line and len(line.strip()) < 50:
+                    continue
+                if 'import pkg_resources' in line:
+                    continue
+                    
+                # Skip any line that is primarily special characters (likely part of banner)
+                if line.strip() and not line.strip().startswith('|') and not all(c in '/ $\\|_.' for c in line.strip()):
+                    # Skip lines that look like divider lines (all dashes, equals, etc.)
+                    if not all(c in '-=+' for c in line.strip()):
+                        filtered_output.append(line)
         
         # Wait for the process to complete
         process.wait()
         
+        # Use filtered output instead of raw output
+        filtered_text = ''.join(filtered_output)
+        
         # Debug print output length and sample
-        print(f"Output length: {len(output)}")
-        print(f"Output sample: {output[:100]}")
+        print(f"Original output length: {len(output)}")
+        print(f"Filtered output length: {len(filtered_text)}")
         
         # Ensure we have some minimal output even if the command didn't output anything
-        if not output.strip():
-            output = "Command executed successfully but produced no output."
+        if not filtered_text.strip():
+            filtered_text = "Command executed successfully but produced no output."
         
         # Store the result in task_results for status API compatibility
         task_results[task_type] = {
             'status': 'completed' if process.returncode == 0 else 'error',
-            'output': output,
+            'output': filtered_text,
             'files': [],  # Find any generated files
             'last_updated': datetime.now().isoformat()
         }
@@ -589,7 +644,7 @@ def run_aws_cli_command():
         
         return jsonify({
             'status': 'completed' if process.returncode == 0 else 'error',
-            'output': output,
+            'output': filtered_text,
             'task': task_type,
             'files': task_results[task_type]['files']
         })

@@ -23,12 +23,12 @@ def welcome_banner():
         """
   /$$$$$$  /$$      /$$  /$$$$$$        /$$$$$$$$ /$$            /$$$$$$                     
  /$$__  $$| $$  /$ | $$ /$$__  $$      | $$_____/|__/           /$$__  $$                    
-| $$  \ $$| $$ /$$$| $$| $$  \__/      | $$       /$$ /$$$$$$$ | $$  \ $$  /$$$$$$   /$$$$$$$
+| $$  \\ $$| $$ /$$$| $$| $$  \\__/      | $$       /$$ /$$$$$$$ | $$  \\ $$  /$$$$$$   /$$$$$$$
 | $$$$$$$$| $$/$$ $$ $$|  $$$$$$       | $$$$$   | $$| $$__  $$| $$  | $$ /$$__  $$ /$$_____/
-| $$__  $$| $$$$_  $$$$ \____  $$      | $$__/   | $$| $$  \ $$| $$  | $$| $$  \ $$|  $$$$$$ 
-| $$  | $$| $$$/ \  $$$ /$$  \ $$      | $$      | $$| $$  | $$| $$  | $$| $$  | $$ \____  $$
-| $$  | $$| $$/   \  $$|  $$$$$$/      | $$      | $$| $$  | $$|  $$$$$$/| $$$$$$$/ /$$$$$$$/
-|__/  |__/|__/     \__/ \______/       |__/      |__/|__/  |__/ \______/ | $$____/ |_______/ 
+| $$__  $$| $$$$_  $$$$ \\____  $$      | $$__/   | $$| $$  \\ $$| $$  | $$| $$  \\ $$|  $$$$$$ 
+| $$  | $$| $$$/ \\  $$$ /$$  \\ $$      | $$      | $$| $$  | $$| $$  | $$| $$  | $$ \\____  $$
+| $$  | $$| $$/   \\  $$|  $$$$$$/      | $$      | $$| $$  | $$|  $$$$$$/| $$$$$$$/ /$$$$$$$/
+|__/  |__/|__/     \\__/ \\______/       |__/      |__/|__/  |__/ \\______/ | $$____/ |_______/ 
                                                                          | $$                
                                                                          | $$                
                                                                          |__/                
@@ -73,9 +73,15 @@ def check_latest_version():
 
 def main() -> int:
     """Command-line interface entry point."""
-    welcome_banner()
-    check_latest_version()
-
+    # Suppress warnings about deprecated modules
+    import warnings
+    warnings.filterwarnings("ignore", category=UserWarning)
+    warnings.filterwarnings("ignore", category=SyntaxWarning)
+    
+    # Suppress warnings about pkg_resources specifically
+    import os
+    os.environ["PYTHONWARNINGS"] = "ignore::UserWarning:pkg_resources"
+    
     # Create the parser instance to be accessible for get_default
     parser = argparse.ArgumentParser(description="AWS FinOps Dashboard CLI")
 
@@ -230,8 +236,27 @@ def main() -> int:
         default=5.0,
         help="CPU utilization threshold (%) to consider an EC2 instance underutilized (default: 5.0)",
     )
+    
+    # Add support for --force-color flag
+    parser.add_argument(
+        "--force-color",
+        action="store_true",
+        help="Force color output even when output is not a terminal",
+    )
+    
+    # Add support for --no-banner flag
+    parser.add_argument(
+        "--no-banner",
+        action="store_true",
+        help="Don't display the welcome banner",
+    )
 
     args = parser.parse_args()
+    
+    # Only display the welcome banner if --no-banner is not specified
+    if not args.no_banner:
+        welcome_banner()
+        check_latest_version()
 
     config_data: Optional[Dict[str, Any]] = None
     if args.config_file:
